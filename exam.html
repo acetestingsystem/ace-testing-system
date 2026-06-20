@@ -876,11 +876,15 @@ function takeSnapshot() {
     + '&eid=' + encodeURIComponent(eid)
     + '&idx=' + idx;
   const statusEl = document.getElementById('snap-status');
-  if (statusEl) statusEl.textContent = '📷 #' + idx + '…';
-  // no-cors: GAS still processes the request server-side; we just can't read opaque response
-  fetch(url, { mode: 'no-cors' })
-    .then(() => { if (statusEl) statusEl.textContent = '✅ sent #' + idx; })
-    .catch(e  => { if (statusEl) statusEl.textContent = '❌ ' + e.message; });
+  if (statusEl) statusEl.textContent = '📷 #' + idx + ' len=' + url.length;
+  console.log('[snap] url length:', url.length, 'b64 length:', b64.length, 'url:', url.substring(0, 200));
+  // Image pixel trick: bypasses CORS response restrictions entirely
+  // onerror fires because GAS returns JSON (not image), but the request WAS sent and processed
+  const img = new Image();
+  img.onload = img.onerror = () => {
+    if (statusEl) statusEl.textContent = '✅ sent #' + idx;
+  };
+  img.src = url;
 }
 
 // ════════════════════════════════════════════════
