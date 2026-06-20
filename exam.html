@@ -352,13 +352,38 @@ async function loadExam() {
 }
 
 function loadPdf() {
-  if (examData.pdf_url) {
-    // Use Google Drive preview URL (no download button)
-    const url = examData.pdf_url.includes('preview')
-      ? examData.pdf_url
-      : 'https://drive.google.com/file/d/' + examData.pdf_url.match(/\/d\/([^/]+)/)?.[1] + '/preview';
-    document.getElementById('pdf-frame').src = url;
-  }
+  if (!examData.pdf_url) return;
+  const frame = document.getElementById('pdf-frame');
+
+  // Extract file ID from any Drive URL format
+  const idMatch = examData.pdf_url.match(/\/d\/([a-zA-Z0-9_-]{10,})/);
+  const fileId  = idMatch ? idMatch[1] : null;
+
+  if (!fileId) { frame.src = examData.pdf_url; return; }
+
+  // Primary: Google Drive /preview (works for publicly shared files)
+  const drivePreview = `https://drive.google.com/file/d/${fileId}/preview`;
+  // Fallback: Google Docs Viewer (more permissive)
+  const docsViewer = `https://docs.google.com/viewer?embedded=true&url=` +
+    encodeURIComponent(`https://drive.google.com/uc?export=download&id=${fileId}`);
+
+  frame.src = drivePreview;
+
+  // If Drive preview fails (error page), switch to Docs Viewer
+  let fallbackDone = false;
+  frame.addEventListener('load', function onLoad() {
+    if (fallbackDone) return;
+    // Check if the iframe loaded an error page by checking URL after redirect
+    try {
+      const iframeUrl = frame.contentWindow?.location?.href || '';
+      if (iframeUrl.includes('accounts.google.com') || iframeUrl.includes('ServiceLogin')) {
+        fallbackDone = true;
+        frame.src = docsViewer;
+      }
+    } catch(e) {
+      // Cross-origin block means Drive loaded successfully — that's fine
+    }
+  });
 }
 
 // ════════════════════════════════════════════════
