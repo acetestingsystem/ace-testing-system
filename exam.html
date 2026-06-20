@@ -774,6 +774,7 @@ async function startWebcam() {
 }
 
 let blazeFaceModel = null;
+let headTurnCount  = 0;
 
 function _dbg(msg) {
   const el = document.getElementById('ai-debug');
@@ -826,8 +827,33 @@ async function checkFace() {
       return;
     }
 
+    // === Head pose: check if student is looking sideways ===
     noFaceCount = 0;
-    document.getElementById('cam-label').textContent = 'Đang giám sát';
+    const lm = predictions[0].landmarks; // [rightEye, leftEye, nose, mouth, rightEar, leftEar]
+    if (lm && lm.length >= 3) {
+      const rEye = lm[0], lEye = lm[1], nose = lm[2];
+      const eyeMidX = (rEye[0] + lEye[0]) / 2;
+      const eyeDist = Math.abs(lEye[0] - rEye[0]);
+      // noseOffset: how far nose is from eye midpoint, normalized by eye width
+      // 0 = straight, >0.4 = turned significantly sideways
+      const noseOffset = eyeDist > 5 ? Math.abs((nose[0] - eyeMidX) / eyeDist) : 0;
+      _dbg(`✅ Face OK | Mặt: 1 | Quay: ${noseOffset.toFixed(2)} | noFace: ${noFaceCount}`);
+
+      if (noseOffset > 0.42) {
+        headTurnCount++;
+        document.getElementById('cam-label').textContent = '⚠️ Nhìn sang bên';
+        if (headTurnCount >= 3) { // 3×1.5s = ~4.5s sustained turn
+          headTurnCount = 0;
+          recordViolationDebounced('Quay đầu nhìn sang bên', 'head_turned', 'medium', 30000);
+        }
+      } else {
+        headTurnCount = 0;
+        document.getElementById('cam-label').textContent = 'Đang giám sát';
+      }
+    } else {
+      headTurnCount = 0;
+      document.getElementById('cam-label').textContent = 'Đang giám sát';
+    }
   } catch (e) { _dbg('❌ Face detect lỗi: ' + e.message); }
 }
 
