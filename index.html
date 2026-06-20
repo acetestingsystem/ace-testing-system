@@ -197,15 +197,15 @@ async function tryStartCamera() {
 
   for (const c of constraints) {
     try {
-      webcamStream = await navigator.mediaDevices.getUserMedia(c);
+      const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000));
+      webcamStream = await Promise.race([navigator.mediaDevices.getUserMedia(c), timeout]);
       const vid = document.getElementById('webcam-video');
       vid.srcObject = webcamStream;
       await vid.play().catch(()=>{});
-      // Wait for video to actually produce frames
       await new Promise(resolve => {
         if (vid.videoWidth > 0) { resolve(); return; }
         vid.addEventListener('loadedmetadata', resolve, { once: true });
-        setTimeout(resolve, 2000); // fallback timeout
+        setTimeout(resolve, 2000);
       });
       hideAlert('webcam-alert');
       btn.textContent = '📸 Chụp ảnh';
