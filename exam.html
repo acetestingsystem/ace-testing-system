@@ -219,6 +219,7 @@
   <canvas id="exam-canvas"></canvas>
   <div id="cam-dot"></div>
   <div id="cam-label">Đang giám sát</div>
+  <div id="snap-status" style="font-size:10px;color:#aaa;margin-top:2px;text-align:center;max-width:120px;word-break:break-all;"></div>
 </div>
 
 <!-- Violation flash -->
@@ -835,13 +836,26 @@ function takeSnapshot() {
   if (!webcamStream) return;
   const video  = document.getElementById('exam-cam');
   const canvas = document.getElementById('exam-canvas');
-  canvas.width  = 64;
-  canvas.height = 48;
-  canvas.getContext('2d').drawImage(video, 0, 0, 64, 48);
-  // Strip data: prefix — GAS already handles raw base64, and smaller payload fits in GET URL
-  const b64 = canvas.toDataURL('image/jpeg', 0.5).split(',')[1];
+  canvas.width  = 96;
+  canvas.height = 72;
+  canvas.getContext('2d').drawImage(video, 0, 0, 96, 72);
+  const b64 = canvas.toDataURL('image/jpeg', 0.4).split(',')[1];
   snapshotIndex++;
-  gas('saveSnapshot', b64, studentData.student_id, examId, snapshotIndex).catch(()=>{});
+  const idx = snapshotIndex;
+  const sid = studentData.student_id;
+  const eid = examId;
+  // Send b64 as its own param to avoid JSON double-encoding overhead
+  const url = GAS_URL + '?action=saveSnapshot'
+    + '&b64=' + encodeURIComponent(b64)
+    + '&sid=' + encodeURIComponent(sid)
+    + '&eid=' + encodeURIComponent(eid)
+    + '&idx=' + idx;
+  const statusEl = document.getElementById('snap-status');
+  if (statusEl) statusEl.textContent = '📷 #' + idx + ' (' + b64.length + 'B)…';
+  fetch(url, { redirect: 'follow' })
+    .then(r => r.json())
+    .then(res => { if (statusEl) statusEl.textContent = res.data?.saved ? '✅ #' + idx : '❌ ' + (res.error||'no folder'); })
+    .catch(e  => { if (statusEl) statusEl.textContent = '❌ fetch: ' + e.message; });
 }
 
 // ════════════════════════════════════════════════
