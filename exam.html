@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Phòng Thi — LMS</title>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js" onerror="this.onerror=null;this.src='https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js'"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.min.js"></script>
 <style>
@@ -952,11 +952,19 @@ function initCam2QR() {
     + '&eid=' + encodeURIComponent(examId);
 
   // Render QR into the big canvas (phase-cam2) and small corner canvas
-  ['cam2-qr-main', 'cam2-qr'].forEach(id => {
-    const c = document.getElementById(id);
-    if (c) QRCode.toCanvas(c, monitorUrl,
-      { width: id === 'cam2-qr-main' ? 200 : 120, margin: 1 }, () => {});
-  });
+  if (typeof QRCode === 'undefined') {
+    // QRCode library failed to load — show clickable link instead
+    const statusEl = document.getElementById('cam2-connect-status');
+    if (statusEl) statusEl.innerHTML =
+      '⚠️ Không tải được thư viện QR.<br>' +
+      '<a href="' + monitorUrl + '" target="_blank" style="color:#2563eb;word-break:break-all;font-size:12px">' + monitorUrl + '</a>';
+  } else {
+    ['cam2-qr-main', 'cam2-qr'].forEach(id => {
+      const c = document.getElementById(id);
+      if (c) QRCode.toCanvas(c, monitorUrl,
+        { width: id === 'cam2-qr-main' ? 200 : 120, margin: 1 }, () => {});
+    });
+  }
   document.getElementById('cam2-panel').style.display = 'block';
 
   // Poll every 6s for cam2_connected / cam2_online heartbeat
