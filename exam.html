@@ -296,6 +296,8 @@ let examId        = null;
 let examData      = null;
 let questions     = [];    // shuffled from server
 let answers       = {};    // { questionId: { answer, keyMap, timeSpent, focusStart } }
+let pdfMode       = false; // true = PDF exam, students fill numbered boxes
+let pdfAnswers    = {};    // { 'Q1': '...', 'Q2': '...' }
 let timerSec      = 0;
 let timerInterval = null;
 let violationCount = 0;
@@ -334,11 +336,13 @@ async function loadExam() {
     if (!res.success) { alert('Lỗi tải đề thi: ' + res.error); return; }
     examData  = res.data.exam;
     questions = res.data.questions;
+    pdfMode   = examData.exam_type === 'pdf' || (questions.length === 0 && parseInt(examData.question_count) > 0);
 
     document.getElementById('exam-title-bar').textContent = examData.title;
     timerSec = parseInt(examData.time_limit) * 60;
     startTimer();
-    renderQuestions();
+    if (pdfMode) renderPdfAnswerBoxes();
+    else renderQuestions();
     loadPdf();
 
     requestFullscreen();
@@ -359,6 +363,48 @@ function loadPdf() {
 // ════════════════════════════════════════════════
 // Render questions
 // ════════════════════════════════════════════════
+function renderPdfAnswerBoxes() {
+  const count = parseInt(examData.question_count) || 10;
+  const container = document.getElementById('quiz-scroll');
+  let html = `<div style="padding:4px 0 12px;font-size:13px;color:#64748b;">
+    📄 Xem đề PDF bên trái, điền đáp án vào các ô bên dưới.
+  </div>`;
+  for (let i = 1; i <= count; i++) {
+    const qid = 'Q' + i;
+    pdfAnswers[qid] = '';
+    html += `
+    <div class="q-block" id="qblock-${qid}">
+      <div class="q-num-row">
+        <span class="q-num">Câu ${i}</span>
+        <span class="q-type-tag sa-tag">Tự luận</span>
+      </div>
+      <textarea class="sa-textarea" id="sa-${qid}"
+        placeholder="Nhập câu trả lời câu ${i}..."
+        oninput="updatePdfAnswer('${qid}', this.value)"
+        onfocus="onPdfFocus('${qid}')" onblur="onPdfBlur('${qid}')"></textarea>
+    </div>`;
+  }
+  container.innerHTML = html;
+  updatePdfProgress();
+}
+
+function updatePdfAnswer(qid, value) {
+  pdfAnswers[qid] = value;
+  document.getElementById('qblock-' + qid)?.classList.toggle('answered', value.trim().length > 0);
+  updatePdfProgress();
+}
+
+let pdfFocusStart = {};
+function onPdfFocus(qid) { pdfFocusStart[qid] = Date.now(); }
+function onPdfBlur(qid)  { delete pdfFocusStart[qid]; }
+
+function updatePdfProgress() {
+  const total    = Object.keys(pdfAnswers).length;
+  const answered = Object.values(pdfAnswers).filter(v => v.trim() !== '').length;
+  document.getElementById('answered-count').textContent = `${answered}/${total}`;
+  document.getElementById('answer-fill').style.width = total ? (answered / total * 100) + '%' : '0%';
+}
+
 function renderQuestions() {
   const container = document.getElementById('quiz-scroll');
   container.innerHTML = questions.map((q, i) => buildQuestion(q, i)).join('');
@@ -575,8 +621,14 @@ function takeSnapshot() {
 // ════════════════════════════════════════════════
 function confirmSubmit() {
   if (submitted) return;
-  const total    = questions.length;
-  const answered = Object.values(answers).filter(a => a.answer && a.answer.trim() !== '').length;
+  let total, answered;
+  if (pdfMode) {
+    total    = Object.keys(pdfAnswers).length;
+    answered = Object.values(pdfAnswers).filter(v => v.trim() !== '').length;
+  } else {
+    total    = questions.length;
+    answered = Object.values(answers).filter(a => a.answer && a.answer.trim() !== '').length;
+  }
   document.getElementById('ans-done').textContent  = answered;
   document.getElementById('ans-total').textContent = total;
   openModal('submit-modal');
@@ -589,25 +641,28 @@ function submitExam() {
   clearInterval(timerInterval);
   clearInterval(snapshotInterval);
 
-  // Finalize time for any currently focused question
-  Object.keys(answers).forEach(qId => {
-    if (answers[qId].focusStart) onQBlur(qId);
-  });
+  Object.keys(answers).forEach(qId => { if (answers[qId].focusStart) onQBlur(qId); });
 
   document.getElementById('btn-submit').disabled = true;
   document.getElementById('btn-submit').textContent = '⏳ Đang nộp bài...';
+
+  const answerList = pdfMode
+    ? Object.entries(pdfAnswers).map(([qid, val]) => ({
+        questionId: qid, answer: val, keyMap: {}, timeSpent: 0
+      }))
+    : questions.map(q => ({
+        questionId: q.question_id,
+        answer:     answers[q.question_id]?.answer || '',
+        keyMap:     answers[q.question_id]?.keyMap || {},
+        timeSpent:  answers[q.question_id]?.timeSpent || 0
+      }));
 
   const payload = {
     studentId: studentData.student_id,
     examId: examId,
     violationCount: violationCount,
     webcamFolderUrl: '',
-    answers: questions.map(q => ({
-      questionId: q.question_id,
-      answer:     answers[q.question_id]?.answer || '',
-      keyMap:     answers[q.question_id]?.keyMap || {},
-      timeSpent:  answers[q.question_id]?.timeSpent || 0
-    }))
+    answers: answerList
   };
 
   gas('submitExam', payload).then(res => {
@@ -635,23 +690,33 @@ function showResult(data) {
   screen.classList.add('show');
 
   const scoreEl = document.getElementById('final-score');
-  const pct = data.max_score > 0 ? Math.round(data.total_score / data.max_score * 100) : 0;
 
-  scoreEl.textContent = `${data.total_score}/${data.max_score}`;
-  document.getElementById('final-score-label').textContent =
-    `câu đúng (${pct}%) — Trắc nghiệm`;
-
-  let msg = '';
-  if (data.flagged) {
-    msg = `<span style="color:#dc2626">⚠️ Bài thi của bạn bị đánh dấu vi phạm và sẽ được giáo viên xem xét.</span><br><br>`;
+  if (pdfMode) {
+    scoreEl.textContent = '✓';
+    scoreEl.style.color = '#16a34a';
+    document.getElementById('final-score-label').textContent = 'Đã nộp bài';
+    let msg = '';
+    if (data.flagged) {
+      msg = `<span style="color:#dc2626">⚠️ Bài thi bị đánh dấu vi phạm và sẽ được giáo viên xem xét.</span><br><br>`;
+    }
+    msg += `Giáo viên sẽ chấm điểm và thông báo kết quả sau.<br>
+            Mã nộp bài: <code>${data.submission_id}</code>`;
+    document.getElementById('result-msg').innerHTML = msg;
+  } else {
+    const pct = data.max_score > 0 ? Math.round(data.total_score / data.max_score * 100) : 0;
+    scoreEl.textContent = `${data.total_score}/${data.max_score}`;
+    document.getElementById('final-score-label').textContent = `câu đúng (${pct}%) — Trắc nghiệm`;
+    let msg = '';
+    if (data.flagged) {
+      msg = `<span style="color:#dc2626">⚠️ Bài thi bị đánh dấu vi phạm và sẽ được giáo viên xem xét.</span><br><br>`;
+    }
+    msg += `Câu tự luận (nếu có) sẽ được giáo viên chấm và cập nhật điểm sau.<br>
+            Mã nộp bài: <code>${data.submission_id}</code>`;
+    document.getElementById('result-msg').innerHTML = msg;
+    if (pct >= 80) scoreEl.style.color = '#16a34a';
+    else if (pct >= 50) scoreEl.style.color = '#d97706';
+    else scoreEl.style.color = '#dc2626';
   }
-  msg += `Câu tự luận (nếu có) sẽ được giáo viên chấm và cập nhật điểm sau.<br>
-          Mã nộp bài: <code>${data.submission_id}</code>`;
-  document.getElementById('result-msg').innerHTML = msg;
-
-  if (pct >= 80) scoreEl.style.color = '#16a34a';
-  else if (pct >= 50) scoreEl.style.color = '#d97706';
-  else scoreEl.style.color = '#dc2626';
 }
 
 // ════════════════════════════════════════════════
