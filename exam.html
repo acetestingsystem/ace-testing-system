@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Phòng Thi — LMS</title>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js" onerror="this.onerror=null;this.src='https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js'"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.min.js"></script>
 <style>
@@ -951,20 +950,32 @@ function initCam2QR() {
     + '?sid=' + encodeURIComponent(studentData.student_id)
     + '&eid=' + encodeURIComponent(examId);
 
-  // Render QR into the big canvas (phase-cam2) and small corner canvas
-  if (typeof QRCode === 'undefined') {
-    // QRCode library failed to load — show clickable link instead
-    const statusEl = document.getElementById('cam2-connect-status');
-    if (statusEl) statusEl.innerHTML =
-      '⚠️ Không tải được thư viện QR.<br>' +
-      '<a href="' + monitorUrl + '" target="_blank" style="color:#2563eb;word-break:break-all;font-size:12px">' + monitorUrl + '</a>';
-  } else {
-    ['cam2-qr-main', 'cam2-qr'].forEach(id => {
-      const c = document.getElementById(id);
-      if (c) QRCode.toCanvas(c, monitorUrl,
-        { width: id === 'cam2-qr-main' ? 200 : 120, margin: 1 }, () => {});
-    });
+  // Render QR using image API (no JS library needed)
+  const qrApiUrl = 'https://api.qrserver.com/v1/create-qr-code/?data='
+    + encodeURIComponent(monitorUrl) + '&size=200x200&margin=10';
+  const qrSmall  = 'https://api.qrserver.com/v1/create-qr-code/?data='
+    + encodeURIComponent(monitorUrl) + '&size=120x120&margin=6';
+
+  // Big canvas in phase-cam2 → replace with <img>
+  const mainCanvas = document.getElementById('cam2-qr-main');
+  if (mainCanvas) {
+    const img = document.createElement('img');
+    img.src = qrApiUrl;
+    img.style.cssText = 'width:200px;height:200px;border-radius:10px;border:3px solid #e2e8f0';
+    img.alt = 'QR Camera 2';
+    mainCanvas.replaceWith(img);
   }
+
+  // Small corner canvas → replace with <img>
+  const cornerCanvas = document.getElementById('cam2-qr');
+  if (cornerCanvas) {
+    const img2 = document.createElement('img');
+    img2.src = qrSmall;
+    img2.style.cssText = 'width:120px;height:120px';
+    img2.alt = 'QR';
+    cornerCanvas.replaceWith(img2);
+  }
+
   document.getElementById('cam2-panel').style.display = 'block';
 
   // Poll every 6s for cam2_connected / cam2_online heartbeat
