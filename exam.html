@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Phòng Thi — LMS</title>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 <style>
   :root {
     --primary: #2563eb; --danger: #dc2626; --success: #16a34a;
@@ -775,7 +775,7 @@ async function startWebcam() {
   label.textContent = '❌ Không có camera';
 }
 
-let useLandmarks = false; // will be true if landmark model loaded OK
+let blazeFaceModel = null;
 
 function _dbg(msg) {
   const el = document.getElementById('ai-debug');
@@ -783,16 +783,14 @@ function _dbg(msg) {
 }
 
 async function initFaceDetection() {
-  const MODEL_URL = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights';
   const label = document.getElementById('cam-label');
   try {
-    _dbg('⏳ Đang tải face model...');
+    _dbg('⏳ Đang tải BlazeFace...');
     label.textContent = 'Đang tải mô hình...';
-    await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-    useLandmarks = false; // skip landmark model — not needed for basic detection
+    blazeFaceModel = await blazeface.load();
     faceDetectionReady = true;
     label.textContent = 'Đang giám sát';
-    _dbg('✅ Face model OK<br>⏳ COCO đang tải...');
+    _dbg('✅ Face OK | ⏳ COCO đang tải...');
     setInterval(checkFace, 1500);
   } catch (e) {
     label.textContent = 'Lỗi mô hình AI';
@@ -800,31 +798,23 @@ async function initFaceDetection() {
   }
 }
 
-function eyeAspectRatio(eye) {
-  const d = (a, b) => Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
-  const vertical = (d(eye[1], eye[5]) + d(eye[2], eye[4])) / 2;
-  const horizontal = d(eye[0], eye[3]);
-  return horizontal > 0 ? vertical / horizontal : 0;
-}
-
 async function checkFace() {
   if (!faceDetectionReady || !webcamStream || submitted) return;
   const video = document.getElementById('exam-cam');
   if (video.readyState < 2) return;
-  const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.3 });
   try {
-    const detections = await faceapi.detectAllFaces(video, opts);
-    _dbg(`✅ Face OK | COCO: ${cocoModel ? 'OK' : '⏳'}<br>Mặt: ${detections.length} | noFaceCount: ${noFaceCount}`);
+    const predictions = await blazeFaceModel.estimateFaces(video, false);
+    const count = predictions.length;
+    _dbg(`✅ Face OK | COCO: ${cocoModel ? 'OK' : '⏳'}<br>Mặt: ${count} | noFaceCount: ${noFaceCount}`);
 
-    // Multiple people in frame
-    if (detections.length > 1) {
+    if (count > 1) {
       noFaceCount = 0;
-      document.getElementById('cam-label').textContent = `⚠️ ${detections.length} người!`;
+      document.getElementById('cam-label').textContent = `⚠️ ${count} người!`;
       recordViolationDebounced('Nhiều người trong khung hình', 'multiple_faces', 'high', 30000);
       return;
     }
 
-    if (detections.length === 0) {
+    if (count === 0) {
       noFaceCount++;
       const sec = (noFaceCount * 1.5).toFixed(0);
       document.getElementById('cam-label').textContent = `⚠️ Không thấy mặt (${sec}s)`;
@@ -838,40 +828,9 @@ async function checkFace() {
       return;
     }
 
-    // Exactly 1 face — check eye visibility
     noFaceCount = 0;
-    let faceOk = true;
-    if (useLandmarks && detections[0].landmarks) {
-      const lm       = detections[0].landmarks;
-      const leftEAR  = eyeAspectRatio(lm.getLeftEye());
-      const rightEAR = eyeAspectRatio(lm.getRightEye());
-      const avgEAR   = (leftEAR + rightEAR) / 2;
-      const box      = detections[0].detection.box;
-      const faceRatio = (box.width * box.height) / (video.videoWidth * video.videoHeight || 76800);
-      faceOk = avgEAR > 0.12 && faceRatio > 0.01;
-    } else {
-      const box = detections[0].box || detections[0].detection?.box;
-      if (box) {
-        const faceRatio = (box.width * box.height) / (video.videoWidth * video.videoHeight || 76800);
-        faceOk = faceRatio > 0.01;
-      }
-    }
-
-    if (!faceOk) {
-      noFaceCount++;
-      document.getElementById('cam-label').textContent = '⚠️ Nhìn đi chỗ khác';
-      if (noFaceCount >= 2) {
-        noFaceCount = 0;
-        recordViolation('Nhìn ra khỏi màn hình', 'looking_away', 'medium');
-        setTimeout(() => {
-          if (!submitted) document.getElementById('cam-label').textContent = 'Đang giám sát';
-        }, 2000);
-      }
-    } else {
-      noFaceCount = 0;
-      document.getElementById('cam-label').textContent = 'Đang giám sát';
-    }
-  } catch (e) { console.warn('checkFace error:', e.message); }
+    document.getElementById('cam-label').textContent = 'Đang giám sát';
+  } catch (e) { _dbg('❌ Face detect lỗi: ' + e.message); }
 }
 
 // ════════════════════════════════════════════════
