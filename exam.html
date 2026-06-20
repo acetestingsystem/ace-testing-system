@@ -177,11 +177,32 @@
 
 <!-- Loading -->
 <div id="loading-overlay">
-  <div class="spinner"></div>
-  <p id="loading-msg">Đang tải đề thi, vui lòng chờ...</p>
-  <button id="btn-start-exam" onclick="startExamFullscreen()" style="display:none;padding:14px 36px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;margin-top:8px;">
-    🖥️ Nhấn để vào toàn màn hình & bắt đầu thi
-  </button>
+  <!-- Phase 1: loading exam data -->
+  <div id="phase-loading" style="text-align:center">
+    <div class="spinner"></div>
+    <p id="loading-msg">Đang tải đề thi, vui lòng chờ...</p>
+  </div>
+
+  <!-- Phase 2: Camera 2 mandatory setup -->
+  <div id="phase-cam2" style="display:none;text-align:center;max-width:340px">
+    <div style="font-size:36px;margin-bottom:8px">📱</div>
+    <h2 style="font-size:18px;color:#1e293b;margin-bottom:6px">Kết nối Camera 2 bắt buộc</h2>
+    <p style="font-size:13px;color:#64748b;margin-bottom:16px">
+      Scan QR bằng điện thoại, đặt phone hướng về phía bàn học.<br>
+      Bài thi sẽ bắt đầu sau khi camera 2 kết nối thành công.
+    </p>
+    <canvas id="cam2-qr-main" style="border-radius:10px;border:3px solid #e2e8f0"></canvas>
+    <div id="cam2-connect-status" style="margin-top:12px;font-size:14px;color:#64748b;min-height:40px">
+      ⏳ Đang chờ điện thoại kết nối...
+    </div>
+    <button id="btn-start-exam" onclick="startExamFullscreen()" disabled
+      style="margin-top:14px;padding:14px 36px;background:#94a3b8;color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:not-allowed;transition:.3s">
+      🖥️ Bắt đầu thi
+    </button>
+    <p style="font-size:11px;color:#94a3b8;margin-top:10px">
+      Nếu không có điện thoại, liên hệ giám thị.
+    </p>
+  </div>
 </div>
 
 <!-- Top bar -->
@@ -367,12 +388,9 @@ async function loadExam() {
     else renderQuestions();
     loadPdf();
 
-    // Show "click to enter fullscreen" button instead of auto-requesting
-    document.getElementById('loading-msg').textContent = '✅ Đề thi đã tải xong. Nhấn nút bên dưới để bắt đầu.';
-    document.querySelector('.spinner').style.display = 'none';
-    document.getElementById('btn-start-exam').style.display = 'block';
-
-    // Generate Camera 2 QR code
+    // Switch to Camera 2 mandatory setup phase
+    document.getElementById('phase-loading').style.display = 'none';
+    document.getElementById('phase-cam2').style.display    = 'block';
     initCam2QR();
   } catch(e) { alert('Lỗi tải đề thi: ' + e.message); }
 }
@@ -923,44 +941,66 @@ function _showVioSent() {
 
 // ════════════════════════════════════════════════
 // ════════════════════════════════════════════════
-// Camera 2 — QR code for phone monitoring
+// Camera 2 — mandatory QR phone monitoring
 // ════════════════════════════════════════════════
+let _cam2Connected = false;
+
 function initCam2QR() {
   if (!studentData || !examId) return;
   const monitorUrl = 'https://vankhoivn13.github.io/lms-system/monitor.html'
     + '?sid=' + encodeURIComponent(studentData.student_id)
     + '&eid=' + encodeURIComponent(examId);
 
-  const canvas = document.getElementById('cam2-qr');
-  QRCode.toCanvas(canvas, monitorUrl, { width: 120, margin: 1, color: { dark:'#000', light:'#fff' } }, err => {
-    if (!err) document.getElementById('cam2-panel').style.display = 'block';
+  // Render QR into the big canvas (phase-cam2) and small corner canvas
+  ['cam2-qr-main', 'cam2-qr'].forEach(id => {
+    const c = document.getElementById(id);
+    if (c) QRCode.toCanvas(c, monitorUrl,
+      { width: id === 'cam2-qr-main' ? 200 : 120, margin: 1 }, () => {});
   });
+  document.getElementById('cam2-panel').style.display = 'block';
 
-  // Poll GAS violations for cam2_connected signal every 8s
-  let cam2Connected = false;
-  const cam2Timer = setInterval(async () => {
-    if (submitted) { clearInterval(cam2Timer); return; }
+  // Poll every 6s for cam2_connected / cam2_online heartbeat
+  const cam2PollTimer = setInterval(async () => {
     try {
       const res = await gas('getViolations', examId);
       if (!res.success) return;
-      const hasHeartbeat = res.data.some(v =>
+      const fresh = res.data.some(v =>
         v.student_id === studentData.student_id &&
-        (v.type === 'cam2_connected' || v.type === 'cam2_online') &&
-        Date.now() - new Date(v.timestamp).getTime() < 60000
+        ['cam2_connected','cam2_online'].includes(v.type) &&
+        Date.now() - new Date(v.timestamp).getTime() < 45000
       );
-      const statusEl = document.getElementById('cam2-status');
-      if (hasHeartbeat && !cam2Connected) {
-        cam2Connected = true;
-        statusEl.textContent = '✅ Camera 2\nđã kết nối';
-        statusEl.className = 'connected';
-      } else if (!hasHeartbeat && cam2Connected) {
-        cam2Connected = false;
-        statusEl.textContent = '⚠️ Camera 2\nmất kết nối';
-        statusEl.className = 'warning';
-        recordViolation('Camera 2 mất kết nối', 'cam2_disconnected', 'high');
-      }
+      _onCam2Status(fresh, cam2PollTimer);
     } catch(e) {}
-  }, 8000);
+  }, 6000);
+}
+
+function _onCam2Status(connected, pollTimer) {
+  const statusEl  = document.getElementById('cam2-connect-status');
+  const cornerEl  = document.getElementById('cam2-status');
+  const btn       = document.getElementById('btn-start-exam');
+
+  if (connected && !_cam2Connected) {
+    _cam2Connected = true;
+    // Phase-cam2: unlock start button
+    if (statusEl) {
+      statusEl.innerHTML = '✅ <strong>Camera 2 đã kết nối!</strong><br><span style="font-size:12px;color:#16a34a">Bạn có thể bắt đầu thi.</span>';
+      statusEl.style.color = '#16a34a';
+    }
+    if (btn) {
+      btn.disabled = false;
+      btn.style.background = '#2563eb';
+      btn.style.cursor = 'pointer';
+    }
+    // Small corner panel
+    if (cornerEl) { cornerEl.textContent = '✅ Cam2 OK'; cornerEl.className = 'connected'; }
+  }
+
+  if (!connected && _cam2Connected) {
+    // Phone disconnected DURING exam → violation
+    _cam2Connected = false;
+    if (cornerEl) { cornerEl.textContent = '⚠️ Cam2 mất'; cornerEl.className = 'warning'; }
+    recordViolation('Camera 2 mất kết nối', 'cam2_disconnected', 'high');
+  }
 }
 
 const _lastWarningTime = {};
