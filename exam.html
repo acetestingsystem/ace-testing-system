@@ -43,13 +43,7 @@
     letter-spacing: .5px; padding: 6px 12px; flex-shrink: 0;
   }
   #pdf-frame {
-    flex: 1; border: none; pointer-events: none;
-    /* Disable text selection and download via CSS */
-    -webkit-touch-callout: none; user-select: none;
-  }
-  .pdf-overlay {
-    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-    z-index: 5; background: transparent;
+    flex: 1; border: none;
   }
 
   #quiz-pane { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
@@ -199,9 +193,7 @@
   <div id="pdf-pane" style="position:relative;">
     <div class="pane-header">📄 Tài liệu đề thi (chỉ đọc)</div>
     <div style="position:relative;flex:1;display:flex;flex-direction:column;">
-      <iframe id="pdf-frame" src="about:blank" style="flex:1;" sandbox="allow-scripts allow-same-origin"></iframe>
-      <!-- Transparent overlay to block right-click and text selection on PDF -->
-      <div class="pdf-overlay" oncontextmenu="return false;" ondragstart="return false;"></div>
+      <iframe id="pdf-frame" src="about:blank" style="flex:1;" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
     </div>
   </div>
 
@@ -759,23 +751,31 @@ async function startWebcam() {
   }
 }
 
+let useLandmarks = false; // will be true if landmark model loaded OK
+
 async function initFaceDetection() {
+  const MODEL_URL = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights';
+  const label = document.getElementById('cam-label');
   try {
-    const MODEL_URL = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights';
+    label.textContent = 'Đang tải mô hình...';
     await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-    await faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL);
+    // Try to load landmark model for eye detection
+    try {
+      await faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL);
+      useLandmarks = true;
+    } catch(e) {
+      console.warn('Landmark model failed, using face-only detection:', e.message);
+      useLandmarks = false;
+    }
     faceDetectionReady = true;
-    document.getElementById('cam-label').textContent = 'Đang giám sát';
-    // Check every 1.5s → 2 consecutive misses ≈ 3s without eyes detected = violation
+    label.textContent = 'Đang giám sát';
     setInterval(checkFace, 1500);
   } catch (e) {
-    console.warn('Eye detection unavailable:', e.message);
+    label.textContent = 'Lỗi mô hình AI';
+    console.warn('Face detection unavailable:', e.message);
   }
 }
 
-// Eye Aspect Ratio: measures how open/visible the eye is
-// EAR = (vertical_dist1 + vertical_dist2) / (2 * horizontal_dist)
-// EAR < 0.15 → eye closed or not visible (looking away)
 function eyeAspectRatio(eye) {
   const d = (a, b) => Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
   const vertical = (d(eye[1], eye[5]) + d(eye[2], eye[4])) / 2;
@@ -787,27 +787,35 @@ async function checkFace() {
   if (!faceDetectionReady || !webcamStream || submitted) return;
   const video = document.getElementById('exam-cam');
   if (video.readyState < 2) return;
+  const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 });
   try {
-    const result = await faceapi
-      .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.45 }))
-      .withFaceLandmarks(true); // true = use tiny landmark net
-
-    let eyesVisible = false;
-    if (result) {
-      const lm = result.landmarks;
-      const leftEAR  = eyeAspectRatio(lm.getLeftEye());
-      const rightEAR = eyeAspectRatio(lm.getRightEye());
-      const avgEAR   = (leftEAR + rightEAR) / 2;
-      // Face must be big enough (not tiny/distant) AND eyes must be open
-      const box = result.detection.box;
-      const faceSize = (box.width * box.height) / (video.videoWidth * video.videoHeight);
-      eyesVisible = avgEAR > 0.15 && faceSize > 0.015;
+    let detected = false;
+    if (useLandmarks) {
+      const result = await faceapi.detectSingleFace(video, opts).withFaceLandmarks(true);
+      if (result) {
+        const lm = result.landmarks;
+        const leftEAR  = eyeAspectRatio(lm.getLeftEye());
+        const rightEAR = eyeAspectRatio(lm.getRightEye());
+        const avgEAR   = (leftEAR + rightEAR) / 2;
+        const box = result.detection.box;
+        const faceRatio = (box.width * box.height) / (video.videoWidth * video.videoHeight || 76800);
+        detected = avgEAR > 0.12 && faceRatio > 0.01;
+      }
+    } else {
+      // Fallback: basic face detection
+      const result = await faceapi.detectSingleFace(video, opts);
+      if (result) {
+        const box = result.box;
+        const faceRatio = (box.width * box.height) / (video.videoWidth * video.videoHeight || 76800);
+        detected = faceRatio > 0.01;
+      }
     }
 
-    if (!eyesVisible) {
+    if (!detected) {
       noFaceCount++;
-      document.getElementById('cam-label').textContent = `⚠️ Không thấy mắt (${noFaceCount * 1.5}s...)`;
-      if (noFaceCount >= 2) { // ~3s not detected → violation
+      const sec = (noFaceCount * 1.5).toFixed(0);
+      document.getElementById('cam-label').textContent = `⚠️ Không thấy mặt (${sec}s)`;
+      if (noFaceCount >= 2) {
         noFaceCount = 0;
         recordViolation('Không nhìn vào màn hình / rời khỏi vị trí');
         setTimeout(() => {
@@ -818,7 +826,7 @@ async function checkFace() {
       noFaceCount = 0;
       document.getElementById('cam-label').textContent = 'Đang giám sát';
     }
-  } catch (e) { /* ignore */ }
+  } catch (e) { console.warn('checkFace error:', e.message); }
 }
 
 function takeSnapshot() {
