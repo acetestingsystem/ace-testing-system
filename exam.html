@@ -887,26 +887,24 @@ function logViolation(type, detail, severity) {
   if (_lastViolationLog[type] && now - _lastViolationLog[type] < 30000) return;
   _lastViolationLog[type] = now;
 
-  const url = GAS_URL
-    + '?action=logViolation'
-    + '&sid='    + encodeURIComponent(studentData.student_id)
-    + '&eid='    + encodeURIComponent(examId)
-    + '&type='   + encodeURIComponent(type)
-    + '&detail=' + encodeURIComponent((detail || '').substring(0, 200))
-    + '&sev='    + encodeURIComponent(severity || 'medium');
+  // sendBeacon: POST fire-and-forget, works cross-origin without CORS preflight
+  // (GET with extra params returns 400 from Google infrastructure)
+  const body = JSON.stringify({
+    action: 'logViolation',
+    args: [studentData.student_id, examId, type, (detail || '').substring(0, 200), severity || 'medium']
+  });
+  const blob = new Blob([body], { type: 'text/plain' });
+  const sent = navigator.sendBeacon ? navigator.sendBeacon(GAS_URL, blob) : false;
 
-  console.log('[violation] sending:', type, url.length, 'chars');
-
-  // Image() trick: confirmed to reach GAS (onerror fires because GAS returns JSON, not image,
-  // but the GET request IS sent and processed before the redirect)
-  const img = new Image();
-  _pendingVioImgs.push(img);
-  img.onload = img.onerror = () => {
-    _pendingVioImgs.splice(_pendingVioImgs.indexOf(img), 1);
+  if (sent) {
     _showVioSent();
-    console.log('[violation] sent OK:', type);
-  };
-  img.src = url;
+    console.log('[violation] beacon sent:', type);
+  } else {
+    // Fallback: fetch no-cors (fire-and-forget, no response visibility)
+    fetch(GAS_URL, { method: 'POST', body: blob, mode: 'no-cors' }).catch(() => {});
+    _showVioSent();
+    console.log('[violation] fetch fallback sent:', type);
+  }
 }
 
 function _showVioSent() {
