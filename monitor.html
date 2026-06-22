@@ -155,7 +155,7 @@ function beacon(type, detail, severity='medium') {
 let heartbeatActive = true;
 const heartbeatTimer = setInterval(() => {
   if (heartbeatActive) beacon('cam2_online', 'Camera 2 đang hoạt động', 'low');
-}, 12000);
+}, 5000);
 
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {

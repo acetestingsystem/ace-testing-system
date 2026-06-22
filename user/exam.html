@@ -993,7 +993,7 @@ function initCam2QR() {
 
   document.getElementById('cam2-panel').style.display = 'block';
 
-  // Poll every 6s — use latest cam2 event to determine state
+  // Poll every 3s — use latest cam2 event to determine state
   const cam2PollTimer = setInterval(async () => {
     try {
       const res = await gas('getViolations', examId);
@@ -1008,11 +1008,11 @@ function initCam2QR() {
       const latest = cam2Events[0];
       const isConnected = latest &&
         ['cam2_connected','cam2_online'].includes(latest.type) &&
-        Date.now() - new Date(latest.timestamp).getTime() < 30000;
+        Date.now() - new Date(latest.timestamp).getTime() < 12000;
 
       _onCam2Status(isConnected, cam2PollTimer);
     } catch(e) {}
-  }, 6000);
+  }, 3000);
 }
 
 function _onCam2Status(connected, pollTimer) {
