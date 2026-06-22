@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phòng Thi — LMS</title>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.min.js"></script>
+<style>
+  :root {
+    --primary: #2563eb; --danger: #dc2626; --success: #16a34a;
+    --warning: #d97706; --border: #e2e8f0; --text: #1e293b; --bg: #f1f5f9;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; user-select: none; -webkit-user-select: none; }
+
+  /* ── Top bar ── */
+  #topbar {
+    height: 52px; background: #1e293b; color: #fff;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px; flex-shrink: 0; z-index: 100; position: relative;
+  }
+  #exam-title-bar { font-size: 14px; font-weight: 600; }
+  #student-bar    { font-size: 12px; color: #94a3b8; }
+  #timer-bar {
+    font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums;
+    background: #334155; padding: 4px 16px; border-radius: 20px;
+  }
+  #timer-bar.warn  { background: #92400e; color: #fde68a; }
+  #timer-bar.crit  { background: #7f1d1d; color: #fca5a5; animation: blink .8s step-end infinite; }
+  @keyframes blink { 50% { opacity: .5; } }
+
+  #violation-bar { font-size: 12px; color: #fca5a5; display: flex; align-items: center; gap: 6px; }
+
+  /* ── Split layout ── */
+  #split { display: flex; height: calc(100vh - 52px); overflow: hidden; }
+
+  #pdf-pane {
+    flex: 0 0 50%; border-right: 3px solid var(--border);
+    display: flex; flex-direction: column; background: #e2e8f0;
+  }
+  #pdf-pane .pane-header {
+    background: #334155; color: #94a3b8; font-size: 11px; text-transform: uppercase;
+    letter-spacing: .5px; padding: 6px 12px; flex-shrink: 0;
+  }
+  #pdf-frame {
+    flex: 1; border: none;
+  }
+
+  #quiz-pane { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  #quiz-pane .pane-header {
+    background: #f8fafc; border-bottom: 1px solid var(--border);
+    font-size: 11px; text-transform: uppercase; letter-spacing: .5px;
+    padding: 6px 16px; color: #64748b; flex-shrink: 0;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  #quiz-scroll { flex: 1; overflow-y: auto; padding: 20px 16px; }
+
+  /* ── Questions ── */
+  .q-block {
+    background: #fff; border: 1.5px solid var(--border); border-radius: 10px;
+    padding: 16px; margin-bottom: 16px; transition: border-color .2s;
+  }
+  .q-block:focus-within { border-color: var(--primary); }
+  .q-block.answered { border-color: #86efac; background: #f0fdf4; }
+  .q-num-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .q-num { font-size: 12px; font-weight: 700; color: var(--primary); }
+  .q-type-tag { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+  .mc-tag { background: #dbeafe; color: var(--primary); }
+  .sa-tag { background: #f0fdf4; color: var(--success); }
+  .q-text { font-size: 14px; line-height: 1.6; margin-bottom: 12px; }
+
+  /* MC options */
+  .mc-options { display: flex; flex-direction: column; gap: 8px; }
+  .mc-option {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 8px;
+    cursor: pointer; transition: all .15s; font-size: 13px;
+  }
+  .mc-option:hover { border-color: var(--primary); background: #eff6ff; }
+  .mc-option input[type=radio] { accent-color: var(--primary); width: 15px; height: 15px; flex-shrink: 0; }
+  .mc-option.selected { border-color: var(--primary); background: #dbeafe; }
+
+  /* SA */
+  .sa-textarea {
+    width: 100%; padding: 10px 12px; border: 1.5px solid var(--border);
+    border-radius: 8px; font-size: 13px; resize: vertical; min-height: 80px;
+    font-family: inherit; color: var(--text);
+  }
+  .sa-textarea:focus { outline: none; border-color: var(--primary); }
+
+  /* Progress bar */
+  #progress-row { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #64748b; }
+  #answer-progress { height: 6px; flex: 1; background: var(--border); border-radius: 3px; overflow: hidden; }
+  #answer-fill     { height: 100%; background: var(--success); transition: width .3s; }
+
+  /* Submit */
+  #submit-zone { padding: 16px; border-top: 1px solid var(--border); background: #f8fafc; flex-shrink: 0; }
+  #btn-submit {
+    width: 100%; padding: 12px; background: var(--success); color: #fff;
+    border: none; border-radius: 8px; font-size: 15px; font-weight: 700; cursor: pointer;
+  }
+  #btn-submit:hover { background: #15803d; }
+  #btn-submit:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* Camera 2 QR panel */
+  #cam2-panel {
+    position: fixed; bottom: 130px; left: 16px; z-index: 200;
+    background: #1e293b; border-radius: 10px; border: 2px solid #334155;
+    width: 140px; padding: 8px; text-align: center; display: none;
+  }
+  #cam2-panel canvas { width: 120px !important; height: 120px !important; border-radius: 6px; }
+  #cam2-status {
+    font-size: 9px; margin-top: 5px; color: #94a3b8; line-height: 1.4;
+  }
+  #cam2-status.connected { color: #4ade80; }
+  #cam2-status.warning   { color: #fbbf24; }
+
+  /* Webcam corner */
+  #cam-corner {
+    position: fixed; bottom: 16px; left: 16px; z-index: 200;
+    background: #000; border-radius: 10px; overflow: hidden;
+    border: 2px solid #334155; width: 140px; height: 105px;
+  }
+  #cam-corner video { width: 100%; height: 100%; object-fit: cover; }
+  #cam-corner canvas { display: none; }
+  #cam-label {
+    position: absolute; bottom: 4px; left: 0; right: 0; text-align: center;
+    font-size: 9px; color: rgba(255,255,255,.7);
+  }
+  #cam-dot {
+    position: absolute; top: 6px; right: 6px; width: 8px; height: 8px;
+    background: #ef4444; border-radius: 50%; animation: blink 1.5s step-end infinite;
+  }
+
+  /* Modals */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 500; align-items: center; justify-content: center; }
+  .modal-overlay.show { display: flex; }
+  .modal { background: #fff; border-radius: 14px; padding: 28px; width: 460px; max-width: 95vw; text-align: center; }
+  .modal .modal-icon { font-size: 52px; margin-bottom: 12px; }
+  .modal h2 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+  .modal p  { font-size: 14px; color: #64748b; line-height: 1.6; }
+  .modal-btns { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
+  .btn { padding: 10px 24px; border-radius: 8px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-danger  { background: var(--danger);  color: #fff; }
+  .btn-outline { background: transparent; border: 1.5px solid var(--border); color: var(--text); }
+
+  /* Warning flash */
+  #violation-flash {
+    position: fixed; inset: 0; background: rgba(220,38,38,.15);
+    pointer-events: none; z-index: 400; opacity: 0; transition: opacity .3s;
+  }
+  #violation-flash.flash { opacity: 1; }
+
+  /* Loading overlay */
+  #loading-overlay {
+    position: fixed; inset: 0; background: rgba(255,255,255,.95);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 600; gap: 16px;
+  }
+  #loading-overlay .spinner { width: 48px; height: 48px; border: 4px solid #e2e8f0; border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading-overlay p { font-size: 15px; color: #64748b; }
+
+  /* Result screen */
+  #result-screen { display: none; position: fixed; inset: 0; background: #fff; z-index: 700; align-items: center; justify-content: center; flex-direction: column; gap: 16px; }
+  #result-screen.show { display: flex; }
+  .result-card { text-align: center; max-width: 400px; padding: 32px; }
+  .result-card .big-score { font-size: 64px; font-weight: 900; color: var(--primary); line-height: 1; }
+  .result-card .score-label { font-size: 16px; color: #64748b; margin-top: 4px; }
+  .result-card .result-msg { font-size: 14px; color: #64748b; margin-top: 16px; line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loading-overlay">
+  <!-- Phase 1: loading exam data -->
+  <div id="phase-loading" style="text-align:center">
+    <div class="spinner"></div>
+    <p id="loading-msg">Đang tải đề thi, vui lòng chờ...</p>
+  </div>
+
+  <!-- Phase 2: Camera 2 mandatory setup -->
+  <div id="phase-cam2" style="display:none;text-align:center;max-width:340px">
+    <div style="font-size:36px;margin-bottom:8px">📱</div>
+    <h2 style="font-size:18px;color:#1e293b;margin-bottom:6px">Kết nối Camera 2 bắt buộc</h2>
+    <p style="font-size:13px;color:#64748b;margin-bottom:16px">
+      Scan QR bằng điện thoại, đặt phone hướng về phía bàn học.<br>
+      Bài thi sẽ bắt đầu sau khi camera 2 kết nối thành công.
+    </p>
+    <canvas id="cam2-qr-main" style="border-radius:10px;border:3px solid #e2e8f0"></canvas>
+    <div id="cam2-connect-status" style="margin-top:12px;font-size:14px;color:#64748b;min-height:40px">
+      ⏳ Đang chờ điện thoại kết nối...
+    </div>
+    <button id="btn-start-exam" onclick="startExamFullscreen()" disabled
+      style="margin-top:14px;padding:14px 36px;background:#94a3b8;color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:not-allowed;transition:.3s">
+      🖥️ Bắt đầu thi
+    </button>
+    <p style="font-size:11px;color:#94a3b8;margin-top:10px">
+      Nếu không có điện thoại, liên hệ giám thị.
+    </p>
+  </div>
+</div>
+
+<!-- Top bar -->
+<div id="topbar">
+  <div>
+    <div id="exam-title-bar">Đang tải...</div>
+    <div id="student-bar"></div>
+  </div>
+  <div id="timer-bar">00:00</div>
+  <div id="violation-bar" onclick="toggleViolationDetail()" title="Nhấn xem chi tiết" style="cursor:pointer;position:relative;">
+    <span>⚠️ Vi phạm:</span>
+    <span id="violation-count">0</span>
+    <span style="font-size:10px;opacity:.6;">▼</span>
+    <div id="violation-detail-popup" style="display:none;position:absolute;top:32px;right:0;background:#0f172a;border:1px solid #475569;border-radius:8px;padding:14px;min-width:240px;z-index:500;text-align:left;box-shadow:0 8px 24px rgba(0,0,0,.5);">
+      <div style="font-size:12px;font-weight:700;color:#f1f5f9;margin-bottom:8px;border-bottom:1px solid #334155;padding-bottom:6px;">📋 Chi tiết vi phạm</div>
+      <div id="violation-detail-list" style="font-size:12px;color:#cbd5e1;line-height:1.8;">Chưa có vi phạm</div>
+    </div>
+  </div>
+</div>
+
+<!-- Split layout -->
+<div id="split">
+  <!-- PDF pane -->
+  <div id="pdf-pane" style="position:relative;">
+    <div class="pane-header">📄 Tài liệu đề thi (chỉ đọc)</div>
+    <div style="position:relative;flex:1;display:flex;flex-direction:column;">
+      <iframe id="pdf-frame" src="about:blank" style="flex:1;" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+    </div>
+  </div>
+
+  <!-- Quiz pane -->
+  <div id="quiz-pane">
+    <div class="pane-header">
+      <span>📝 Bài làm</span>
+      <div id="progress-row">
+        <span id="answered-count">0/0</span>
+        <div id="answer-progress"><div id="answer-fill" style="width:0%"></div></div>
+      </div>
+    </div>
+    <div id="quiz-scroll"></div>
+    <div id="submit-zone">
+      <button id="btn-submit" onclick="confirmSubmit()">📤 Nộp bài</button>
+    </div>
+  </div>
+</div>
+
+<!-- Webcam corner -->
+<!-- Camera 2 QR panel -->
+<div id="cam2-panel">
+  <canvas id="cam2-qr"></canvas>
+  <div id="cam2-status">📷 Scan để bật<br>Camera 2</div>
+</div>
+
+<div id="cam-corner">
+  <video id="exam-cam" autoplay playsinline muted></video>
+  <div id="cam-dot"></div>
+  <div id="cam-label">Đang giám sát</div>
+</div>
+<!-- AI debug overlay (temp) -->
+<div id="ai-debug" style="position:fixed;bottom:8px;left:8px;background:rgba(0,0,0,0.75);color:#0f0;font:11px monospace;padding:6px 8px;border-radius:6px;z-index:9999;max-width:260px;line-height:1.6;pointer-events:none;"></div>
+<!-- Violation flash -->
+<div id="violation-flash"></div>
+
+<!-- Warning modal -->
+<div class="modal-overlay" id="warning-modal">
+  <div class="modal">
+    <div class="modal-icon">⚠️</div>
+    <h2>Cảnh báo vi phạm!</h2>
+    <p id="warning-msg">Hành động này đã được ghi lại.</p>
+    <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:8px;padding:12px;margin-top:12px;font-size:13px;color:#dc2626;">
+      <div style="margin-bottom:8px;">Tổng vi phạm: <b id="warn-count">0</b> lần — Từ 3 lần sẽ bị đánh dấu gian lận</div>
+      <div id="warn-detail-list" style="line-height:2;font-size:12px;color:#991b1b;"></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-primary" onclick="closeWarning()">Tôi hiểu, tiếp tục thi</button>
+    </div>
+  </div>
+</div>
+
+<!-- Submit confirm modal -->
+<div class="modal-overlay" id="submit-modal">
+  <div class="modal">
+    <div class="modal-icon">📤</div>
+    <h2>Xác nhận nộp bài?</h2>
+    <p id="submit-summary">Bạn đã trả lời <b id="ans-done">0</b>/<b id="ans-total">0</b> câu hỏi.<br>Sau khi nộp bài sẽ không thể sửa.</p>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeModal('submit-modal')">Quay lại</button>
+      <button class="btn btn-danger"  onclick="submitExam()">✅ Nộp bài ngay</button>
+    </div>
+  </div>
+</div>
+
+<!-- Flagged modal -->
+<div class="modal-overlay" id="flagged-modal">
+  <div class="modal">
+    <div class="modal-icon">🚨</div>
+    <h2 style="color:#dc2626">Bài thi bị gắn cờ!</h2>
+    <p>Bạn đã vi phạm quy định thi quá nhiều lần. Bài thi của bạn vẫn được nộp nhưng <b>bị đánh dấu gian lận</b> và sẽ được giáo viên xem xét.</p>
+    <div class="modal-btns">
+      <button class="btn btn-primary" onclick="closeModal('flagged-modal')">Đã hiểu</button>
+    </div>
+  </div>
+</div>
+
+<!-- Result screen -->
+<div id="result-screen">
+  <div style="font-size:48px;">🎉</div>
+  <div class="result-card">
+    <div class="big-score" id="final-score">—</div>
+    <div class="score-label" id="final-score-label">điểm</div>
+    <div class="result-msg" id="result-msg"></div>
+    <button class="btn btn-primary" style="margin-top:20px;width:100%;" onclick="window.location.href='./index.html'">
+      🏠 Về trang chủ
+    </button>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════
+// ════════════════════════════════════════════════
+// GAS API helper (fetch-based, for GitHub Pages)
+// ════════════════════════════════════════════════
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxeWng8djn2nsp26i4CinFZGlsQlGOFiUF4UAKO56uDWlAfbYlOTcjbvyHXiEPTda8K/exec';
+async function gas(action, ...args) {
+  const url = GAS_URL + '?action=' + encodeURIComponent(action) + '&args=' + encodeURIComponent(JSON.stringify(args));
+  const resp = await fetch(url, { redirect: 'follow' });
+  const text = await resp.text();
+  try { return JSON.parse(text); } catch(e) { return { success: false, error: text }; }
+}
+
+// State
+// ════════════════════════════════════════════════
+let studentData   = null;
+let examId        = null;
+let examData      = null;
+let questions     = [];    // shuffled from server
+let answers       = {};    // { questionId: { answer, keyMap, timeSpent, focusStart } }
+let pdfMode       = false;
+let pdfAnswers    = {};
+let timerSec      = 0;
+let violationLog  = {};    // { 'Chuyển tab': 2, 'Không nhìn camera': 1, ... }
+let timerInterval = null;
+let violationCount = 0;
+let webcamStream  = null;
+let submitted     = false;
+let questionFocusStart = {};   // questionId -> Date
+
+// ════════════════════════════════════════════════
+// Boot
+// ════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  studentData = JSON.parse(sessionStorage.getItem('lms_student') || 'null');
+  examId      = sessionStorage.getItem('lms_exam_id');
+
+  if (!studentData || !examId) {
+    window.location.href = './index.html';
+    return;
+  }
+
+  document.getElementById('student-bar').textContent =
+    `${studentData.name} — ${studentData.class}`;
+
+  loadExam();
+  setupAntiCheat();
+  startWebcam();
+});
+
+// ════════════════════════════════════════════════
+// Load exam
+// ════════════════════════════════════════════════
+async function loadExam() {
+  try {
+    const res = await gas('getExamForStudent', examId, studentData.student_id);
+    if (!res.success) { alert('Lỗi tải đề thi: ' + res.error); return; }
+    examData  = res.data.exam;
+    questions = res.data.questions;
+    pdfMode   = examData.exam_type === 'pdf' || (questions.length === 0 && parseInt(examData.question_count) > 0);
+
+    document.getElementById('exam-title-bar').textContent = examData.title;
+    timerSec = parseInt(examData.time_limit) * 60;
+    startTimer();
+    if (pdfMode) renderPdfAnswerBoxes();
+    else renderQuestions();
+    loadPdf();
+
+    // Switch to Camera 2 mandatory setup phase
+    document.getElementById('phase-loading').style.display = 'none';
+    document.getElementById('phase-cam2').style.display    = 'block';
+    initCam2QR();
+  } catch(e) { alert('Lỗi tải đề thi: ' + e.message); }
+}
+
+function loadPdf() {
+  if (!examData.pdf_url) return;
+  const frame = document.getElementById('pdf-frame');
+
+  // Extract file ID from any Drive URL format
+  const idMatch = examData.pdf_url.match(/\/d\/([a-zA-Z0-9_-]{10,})/);
+  const fileId  = idMatch ? idMatch[1] : null;
+
+  if (!fileId) { frame.src = examData.pdf_url; return; }
+
+  // Primary: Google Drive /preview (works for publicly shared files)
+  const drivePreview = `https://drive.google.com/file/d/${fileId}/preview`;
+  // Fallback: Google Docs Viewer (more permissive)
+  const docsViewer = `https://docs.google.com/viewer?embedded=true&url=` +
+    encodeURIComponent(`https://drive.google.com/uc?export=download&id=${fileId}`);
+
+  frame.src = drivePreview;
+
+  // If Drive preview fails (error page), switch to Docs Viewer
+  let fallbackDone = false;
+  frame.addEventListener('load', function onLoad() {
+    if (fallbackDone) return;
+    // Check if the iframe loaded an error page by checking URL after redirect
+    try {
+      const iframeUrl = frame.contentWindow?.location?.href || '';
+      if (iframeUrl.includes('accounts.google.com') || iframeUrl.includes('ServiceLogin')) {
+        fallbackDone = true;
+        frame.src = docsViewer;
+      }
+    } catch(e) {
+      // Cross-origin block means Drive loaded successfully — that's fine
+    }
+  });
+}
+
+// ════════════════════════════════════════════════
+// Render questions
+// ════════════════════════════════════════════════
+function renderPdfAnswerBoxes() {
+  const count = parseInt(examData.question_count) || 10;
+  const container = document.getElementById('quiz-scroll');
+  let html = `<div style="padding:4px 0 12px;font-size:13px;color:#64748b;">
+    📄 Xem đề PDF bên trái, điền đáp án vào các ô bên dưới.
+  </div>`;
+  for (let i = 1; i <= count; i++) {
+    const qid = 'Q' + i;
+    pdfAnswers[qid] = '';
+    html += `
+    <div class="q-block" id="qblock-${qid}">
+      <div class="q-num-row">
+        <span class="q-num">Câu ${i}</span>
+        <span class="q-type-tag sa-tag">Tự luận</span>
+      </div>
+      <textarea class="sa-textarea" id="sa-${qid}"
+        placeholder="Nhập câu trả lời câu ${i}..."
+        oninput="updatePdfAnswer('${qid}', this.value)"
+        onfocus="onPdfFocus('${qid}')" onblur="onPdfBlur('${qid}')"></textarea>
+    </div>`;
+  }
+  container.innerHTML = html;
+  updatePdfProgress();
+}
+
+function updatePdfAnswer(qid, value) {
+  pdfAnswers[qid] = value;
+  document.getElementById('qblock-' + qid)?.classList.toggle('answered', value.trim().length > 0);
+  updatePdfProgress();
+}
+
+let pdfFocusStart = {};
+function onPdfFocus(qid) { pdfFocusStart[qid] = Date.now(); }
+function onPdfBlur(qid)  { delete pdfFocusStart[qid]; }
+
+function updatePdfProgress() {
+  const total    = Object.keys(pdfAnswers).length;
+  const answered = Object.values(pdfAnswers).filter(v => v.trim() !== '').length;
+  document.getElementById('answered-count').textContent = `${answered}/${total}`;
+  document.getElementById('answer-fill').style.width = total ? (answered / total * 100) + '%' : '0%';
+}
+
+function renderQuestions() {
+  const container = document.getElementById('quiz-scroll');
+  container.innerHTML = questions.map((q, i) => buildQuestion(q, i)).join('');
+  updateProgress();
+}
+
+function buildQuestion(q, i) {
+  const isMC = q.type === 'mc';
+  if (!answers[q.question_id]) answers[q.question_id] = { answer: '', keyMap: q.key_map || {}, timeSpent: 0, focusStart: null };
+
+  const optionsHTML = isMC
+    ? `<div class="mc-options">${q.options.map(opt => `
+        <label class="mc-option" id="opt-${q.question_id}-${opt.key}"
+               onclick="selectMC('${q.question_id}','${opt.key}')">
+          <input type="radio" name="q_${q.question_id}" value="${opt.key}">
+          <span><b>${opt.key}.</b> ${opt.text}</span>
+        </label>`).join('')}
+      </div>`
+    : `<textarea class="sa-textarea" id="sa-${q.question_id}"
+         placeholder="Nhập câu trả lời của bạn..."
+         oninput="updateSA('${q.question_id}', this.value)"
+         onfocus="onQFocus('${q.question_id}')"
+         onblur="onQBlur('${q.question_id}')"></textarea>`;
+
+  return `<div class="q-block" id="qblock-${q.question_id}"
+              onfocus="onQFocus('${q.question_id}')" onblur="onQBlur('${q.question_id}')" tabindex="-1">
+    <div class="q-num-row">
+      <span class="q-num">Câu ${i+1}</span>
+      <span class="q-type-tag ${isMC?'mc-tag':'sa-tag'}">${isMC?'Trắc nghiệm':'Tự luận'}</span>
+    </div>
+    <div class="q-text">${q.question_text}</div>
+    ${optionsHTML}
+  </div>`;
+}
+
+function selectMC(questionId, key) {
+  onQFocus(questionId);
+  answers[questionId].answer = key;
+
+  // Visual update
+  const q = questions.find(q => q.question_id === questionId);
+  if (q) {
+    q.options.forEach(opt => {
+      const el = document.getElementById('opt-' + questionId + '-' + opt.key);
+      if (el) el.classList.toggle('selected', opt.key === key);
+    });
+  }
+
+  // Check radio
+  const radio = document.querySelector(`input[name="q_${questionId}"][value="${key}"]`);
+  if (radio) radio.checked = true;
+
+  document.getElementById('qblock-' + questionId)?.classList.add('answered');
+  onQBlur(questionId);
+  updateProgress();
+}
+
+function updateSA(questionId, value) {
+  answers[questionId].answer = value;
+  const block = document.getElementById('qblock-' + questionId);
+  if (block) block.classList.toggle('answered', value.trim().length > 0);
+  updateProgress();
+}
+
+function updateProgress() {
+  const total    = questions.length;
+  const answered = Object.values(answers).filter(a => a.answer && a.answer.trim() !== '').length;
+  document.getElementById('answered-count').textContent = `${answered}/${total}`;
+  document.getElementById('answer-fill').style.width = total ? (answered / total * 100) + '%' : '0%';
+}
+
+// ════════════════════════════════════════════════
+// Time tracking per question
+// ════════════════════════════════════════════════
+function onQFocus(qId) {
+  if (!answers[qId]) return;
+  answers[qId].focusStart = Date.now();
+}
+
+function onQBlur(qId) {
+  if (!answers[qId] || !answers[qId].focusStart) return;
+  answers[qId].timeSpent += Math.floor((Date.now() - answers[qId].focusStart) / 1000);
+  answers[qId].focusStart = null;
+}
+
+// ════════════════════════════════════════════════
+// Timer
+// ════════════════════════════════════════════════
+function startTimer() {
+  updateTimerDisplay();
+  timerInterval = setInterval(() => {
+    timerSec--;
+    updateTimerDisplay();
+    if (timerSec <= 0) { clearInterval(timerInterval); autoSubmit(); }
+  }, 1000);
+}
+
+function updateTimerDisplay() {
+  const m = Math.floor(Math.abs(timerSec) / 60).toString().padStart(2, '0');
+  const s = (Math.abs(timerSec) % 60).toString().padStart(2, '0');
+  const el = document.getElementById('timer-bar');
+  el.textContent = m + ':' + s;
+  el.classList.toggle('warn', timerSec <= 300 && timerSec > 60);
+  el.classList.toggle('crit', timerSec <= 60 && timerSec > 0);
+}
+
+function autoSubmit() {
+  if (submitted) return;
+  alert('⏰ Hết giờ! Bài thi tự động nộp.');
+  submitExam();
+}
+
+// ════════════════════════════════════════════════
+// Anti-cheat layer
+// ════════════════════════════════════════════════
+// ════════════════════════════════════════════════
+// Auto-save answers to localStorage (backup)
+// ════════════════════════════════════════════════
+function autoSaveDraft() {
+  if (submitted) return;
+  try {
+    const draft = {
+      studentId: studentData?.student_id,
+      examId,
+      ts: Date.now(),
+      pdfAnswers: pdfMode ? pdfAnswers : null,
+      answers: pdfMode ? null : Object.fromEntries(
+        Object.entries(answers).map(([k,v]) => [k, v.answer || ''])
+      )
+    };
+    localStorage.setItem('lms_draft', JSON.stringify(draft));
+  } catch(e) {}
+}
+
+function buildSubmitPayload() {
+  const answerList = pdfMode
+    ? Object.entries(pdfAnswers).map(([qid, val]) => ({ questionId: qid, answer: val, keyMap: {}, timeSpent: 0 }))
+    : questions.map(q => ({
+        questionId: q.question_id,
+        answer:     answers[q.question_id]?.answer || '',
+        keyMap:     answers[q.question_id]?.keyMap || {},
+        timeSpent:  answers[q.question_id]?.timeSpent || 0
+      }));
+  return {
+    studentId: studentData.student_id,
+    examId,
+    violationCount,
+    webcamFolderUrl: '',
+    answers: answerList
+  };
+}
+
+function setupAntiCheat() {
+
+  // Auto-save draft every 20 seconds
+  setInterval(autoSaveDraft, 20000);
+
+  // 1. Tab switch / visibility change
+  let lastHidden = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && !submitted) {
+      lastHidden = Date.now();
+      recordViolation('Chuyển tab / tắt màn hình', 'tab_switch', 'medium');
+    } else if (!document.hidden && !submitted) {
+      // Came back → force fullscreen immediately
+      setTimeout(requestFullscreen, 200);
+    }
+  });
+
+  // Window blur (switch app/window) — debounce to avoid fullscreen transition false positives
+  let blurTimer = null;
+  window.addEventListener('blur', () => {
+    if (submitted) return;
+    blurTimer = setTimeout(() => {
+      if (document.hidden) return; // already handled by visibilitychange
+      recordViolation('Rời cửa sổ thi', 'window_blur', 'medium');
+      requestFullscreen();
+    }, 500);
+  });
+  window.addEventListener('focus', () => {
+    clearTimeout(blurTimer);
+    if (!submitted) requestFullscreen();
+  });
+
+  // 2. Fullscreen exit → warn + re-enter immediately
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement && !submitted) {
+      recordViolation('Thoát toàn màn hình', 'fullscreen_exit', 'medium');
+      // Re-enter fullscreen after brief delay (browser needs user gesture context)
+      setTimeout(requestFullscreen, 300);
+    }
+  });
+
+  // 3. Page close / navigate away → AUTO SUBMIT
+  window.addEventListener('pagehide', () => {
+    // Always release camera immediately so other pages can use it
+    if (webcamStream) { webcamStream.getTracks().forEach(t => t.stop()); webcamStream = null; }
+    if (submitted) return;
+    submitted = true;
+    autoSaveDraft();
+    try {
+      const payload = buildSubmitPayload();
+      const url = GAS_URL + '?action=submitExam&args=' + encodeURIComponent(JSON.stringify([payload]));
+      fetch(url, { keepalive: true, redirect: 'follow' }).catch(() => {});
+    } catch(e) {}
+  });
+
+  window.addEventListener('beforeunload', (e) => {
+    if (!submitted) {
+      e.preventDefault();
+      e.returnValue = 'Bài thi sẽ tự động nộp khi bạn rời trang!';
+    }
+  });
+
+  // 4. Disable right-click
+  document.addEventListener('contextmenu', e => e.preventDefault());
+
+  // 5. Disable Ctrl+C, Ctrl+V, Ctrl+A, Ctrl+U, F12, PrintScreen
+  document.addEventListener('keydown', e => {
+    const ctrl = e.ctrlKey || e.metaKey;
+    const blocked = (ctrl && ['c','v','a','u','s','p'].includes(e.key.toLowerCase())) ||
+                    e.key === 'F12' || e.key === 'PrintScreen';
+    if (blocked) e.preventDefault();
+    if (e.key === 'Escape' && !submitted) { e.preventDefault(); requestFullscreen(); }
+  });
+
+}
+
+function renderViolationDetail() {
+  const entries = Object.entries(violationLog);
+  if (!entries.length) return '<span style="color:#94a3b8">Chưa có vi phạm</span>';
+  return entries.map(([k, v]) =>
+    `<div>🔴 <b>${v} lần</b> — ${k}</div>`
+  ).join('');
+}
+
+function recordViolation(reason, type, severity) {
+  if (submitted) return;
+  violationCount++;
+  violationLog[reason] = (violationLog[reason] || 0) + 1;
+  logViolation(type || 'behavior', reason, severity || 'medium');
+
+  // Update topbar count
+  document.getElementById('violation-count').textContent = violationCount;
+  // Update popup detail
+  document.getElementById('violation-detail-list').innerHTML = renderViolationDetail();
+
+  // Flash border
+  const flash = document.getElementById('violation-flash');
+  flash.classList.add('flash');
+  setTimeout(() => flash.classList.remove('flash'), 600);
+
+  if (violationCount > 3) {
+    showFlaggedModal();
+  } else {
+    document.getElementById('warning-msg').textContent =
+      `⚠️ Lỗi: ${reason}. Hành động đã được ghi lại.`;
+    document.getElementById('warn-count').textContent = violationCount;
+    // Show detailed breakdown in warning modal
+    document.getElementById('warn-detail-list').innerHTML = renderViolationDetail();
+    openModal('warning-modal');
+  }
+}
+
+function toggleViolationDetail() {
+  const popup = document.getElementById('violation-detail-popup');
+  popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
+}
+
+// Close popup when clicking outside
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#violation-bar')) {
+    const popup = document.getElementById('violation-detail-popup');
+    if (popup) popup.style.display = 'none';
+  }
+});
+
+function closeWarning() {
+  closeModal('warning-modal');
+  requestFullscreen();
+}
+
+function showFlaggedModal() { openModal('flagged-modal'); }
+
+function requestFullscreen() {
+  const el = document.documentElement;
+  if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+  else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+}
+
+function startExamFullscreen() {
+  requestFullscreen();
+  document.getElementById('loading-overlay').style.display = 'none';
+}
+
+// ════════════════════════════════════════════════
+// Webcam + Face Detection
+// ════════════════════════════════════════════════
+let faceDetectionReady = false;
+let noFaceCount = 0; // consecutive no-face detections
+
+async function startWebcam() {
+  const label = document.getElementById('cam-label');
+  label.textContent = 'Đang kết nối...';
+
+  // Build constraint list with device enumeration (same robust logic as login page)
+  const constraints = [];
+  try {
+    const temp = await navigator.mediaDevices.getUserMedia({ video: true });
+    temp.getTracks().forEach(t => t.stop());
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cameras = devices.filter(d => d.kind === 'videoinput');
+    cameras.reverse().forEach(cam => {
+      constraints.push({ video: { deviceId: { exact: cam.deviceId }, width: { ideal: 320 }, height: { ideal: 240 } } });
+    });
+  } catch(e) {}
+  constraints.push({ video: { width: { ideal: 320 }, height: { ideal: 240 } } });
+  constraints.push({ video: true });
+
+  const vid = document.getElementById('exam-cam');
+  for (const c of constraints) {
+    try {
+      const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000));
+      webcamStream = await Promise.race([navigator.mediaDevices.getUserMedia(c), timeout]);
+      vid.srcObject = webcamStream;
+      await vid.play().catch(() => {});
+      // Verify frames are flowing
+      await new Promise(r => setTimeout(r, 800));
+      if (vid.readyState >= 2 && webcamStream.getVideoTracks()[0]?.readyState === 'live') {
+        label.textContent = 'Đang giám sát';
+        initFaceDetection();
+        return;
+      }
+      webcamStream.getTracks().forEach(t => t.stop());
+    } catch(e) {}
+  }
+  label.textContent = '❌ Không có camera';
+}
+
+let blazeFaceModel = null;
+let headTurnCount  = 0;
+
+function _dbg(msg) {
+  const el = document.getElementById('ai-debug');
+  if (el) { el.innerHTML = msg; }
+}
+
+async function initFaceDetection() {
+  const label = document.getElementById('cam-label');
+  try {
+    _dbg('⏳ Đang tải BlazeFace...');
+    label.textContent = 'Đang tải mô hình...';
+    blazeFaceModel = await blazeface.load();
+    faceDetectionReady = true;
+    label.textContent = 'Đang giám sát';
+    _dbg('✅ Face OK | Đang giám sát');
+    setInterval(checkFace, 1500);
+  } catch (e) {
+    label.textContent = 'Lỗi mô hình AI';
+    _dbg('❌ Face model LỖI: ' + e.message);
+  }
+}
+
+async function checkFace() {
+  if (!faceDetectionReady || !webcamStream || submitted) return;
+  const video = document.getElementById('exam-cam');
+  if (video.readyState < 2) return;
+  try {
+    const predictions = await blazeFaceModel.estimateFaces(video, false);
+    const count = predictions.length;
+    _dbg(`✅ Face OK | Mặt: ${count} | noFaceCount: ${noFaceCount}`);
+
+    if (count > 1) {
+      noFaceCount = 0;
+      document.getElementById('cam-label').textContent = `⚠️ ${count} người!`;
+      recordViolationDebounced('Nhiều người trong khung hình', 'multiple_faces', 'high', 30000);
+      return;
+    }
+
+    if (count === 0) {
+      noFaceCount++;
+      const sec = (noFaceCount * 1.5).toFixed(0);
+      document.getElementById('cam-label').textContent = `⚠️ Không thấy mặt (${sec}s)`;
+      if (noFaceCount >= 3) {
+        noFaceCount = 0;
+        recordViolation('Không nhìn vào màn hình / rời khỏi vị trí', 'face_not_detected', 'medium');
+        setTimeout(() => {
+          if (!submitted) document.getElementById('cam-label').textContent = 'Đang giám sát';
+        }, 2000);
+      }
+      return;
+    }
+
+    // === Head pose: check if student is looking sideways ===
+    noFaceCount = 0;
+    const lm = predictions[0].landmarks; // [rightEye, leftEye, nose, mouth, rightEar, leftEar]
+    if (lm && lm.length >= 3) {
+      const rEye = lm[0], lEye = lm[1], nose = lm[2];
+      const eyeMidX = (rEye[0] + lEye[0]) / 2;
+      const eyeDist = Math.abs(lEye[0] - rEye[0]);
+      // noseOffset: how far nose is from eye midpoint, normalized by eye width
+      // 0 = straight, >0.4 = turned significantly sideways
+      const noseOffset = eyeDist > 5 ? Math.abs((nose[0] - eyeMidX) / eyeDist) : 0;
+      _dbg(`✅ Face OK | Mặt: 1 | Quay: ${noseOffset.toFixed(2)} | noFace: ${noFaceCount}`);
+
+      if (noseOffset > 0.42) {
+        headTurnCount++;
+        document.getElementById('cam-label').textContent = '⚠️ Nhìn sang bên';
+        if (headTurnCount >= 3) { // 3×1.5s = ~4.5s sustained turn
+          headTurnCount = 0;
+          recordViolationDebounced('Quay đầu nhìn sang bên', 'head_turned', 'medium', 30000);
+        }
+      } else {
+        headTurnCount = 0;
+        document.getElementById('cam-label').textContent = 'Đang giám sát';
+      }
+    } else {
+      headTurnCount = 0;
+      document.getElementById('cam-label').textContent = 'Đang giám sát';
+    }
+  } catch (e) { _dbg('❌ Face detect lỗi: ' + e.message); }
+}
+
+// ════════════════════════════════════════════════
+// Violation logging to GAS (tiny GET request — no image payload)
+// ════════════════════════════════════════════════
+const _lastViolationLog = {};
+const _pendingVioImgs   = []; // keep global refs so browser doesn't GC before request finishes
+
+function logViolation(type, detail, severity) {
+  if (!studentData || !examId) return;
+  // Debounce per type: max once per 30s
+  const now = Date.now();
+  if (_lastViolationLog[type] && now - _lastViolationLog[type] < 30000) return;
+  _lastViolationLog[type] = now;
+
+  // sendBeacon: POST fire-and-forget, works cross-origin without CORS preflight
+  // (GET with extra params returns 400 from Google infrastructure)
+  const body = JSON.stringify({
+    action: 'logViolation',
+    args: [studentData.student_id, examId, type, (detail || '').substring(0, 200), severity || 'medium']
+  });
+  const blob = new Blob([body], { type: 'text/plain' });
+  const sent = navigator.sendBeacon ? navigator.sendBeacon(GAS_URL, blob) : false;
+
+  if (sent) {
+    _showVioSent();
+    console.log('[violation] beacon sent:', type);
+  } else {
+    // Fallback: fetch no-cors (fire-and-forget, no response visibility)
+    fetch(GAS_URL, { method: 'POST', body: blob, mode: 'no-cors' }).catch(() => {});
+    _showVioSent();
+    console.log('[violation] fetch fallback sent:', type);
+  }
+}
+
+function _showVioSent() {
+  const label = document.getElementById('cam-label');
+  if (!label || submitted) return;
+  const prev = label.textContent;
+  label.textContent = '📤 Đã ghi vi phạm';
+  setTimeout(() => { if (label.textContent === '📤 Đã ghi vi phạm') label.textContent = prev || 'Đang giám sát'; }, 1500);
+}
+
+// ════════════════════════════════════════════════
+// ════════════════════════════════════════════════
+// Camera 2 — mandatory QR phone monitoring
+// ════════════════════════════════════════════════
+let _cam2Connected = false;
+
+function initCam2QR() {
+  if (!studentData || !examId) return;
+  const monitorUrl = 'https://vankhoivn13.github.io/lms-system/monitor.html'
+    + '?sid=' + encodeURIComponent(studentData.student_id)
+    + '&eid=' + encodeURIComponent(examId);
+
+  // Render QR using image API (no JS library needed)
+  const qrApiUrl = 'https://api.qrserver.com/v1/create-qr-code/?data='
+    + encodeURIComponent(monitorUrl) + '&size=200x200&margin=10';
+  const qrSmall  = 'https://api.qrserver.com/v1/create-qr-code/?data='
+    + encodeURIComponent(monitorUrl) + '&size=120x120&margin=6';
+
+  // Big canvas in phase-cam2 → replace with <img>
+  const mainCanvas = document.getElementById('cam2-qr-main');
+  if (mainCanvas) {
+    const img = document.createElement('img');
+    img.src = qrApiUrl;
+    img.style.cssText = 'width:200px;height:200px;border-radius:10px;border:3px solid #e2e8f0';
+    img.alt = 'QR Camera 2';
+    mainCanvas.replaceWith(img);
+  }
+
+  // Small corner canvas → replace with <img>
+  const cornerCanvas = document.getElementById('cam2-qr');
+  if (cornerCanvas) {
+    const img2 = document.createElement('img');
+    img2.src = qrSmall;
+    img2.style.cssText = 'width:120px;height:120px';
+    img2.alt = 'QR';
+    cornerCanvas.replaceWith(img2);
+  }
+
+  document.getElementById('cam2-panel').style.display = 'block';
+
+  // Poll every 6s for cam2_connected / cam2_online heartbeat
+  const cam2PollTimer = setInterval(async () => {
+    try {
+      const res = await gas('getViolations', examId);
+      if (!res.success) return;
+      const fresh = res.data.some(v =>
+        v.student_id === studentData.student_id &&
+        ['cam2_connected','cam2_online'].includes(v.type) &&
+        Date.now() - new Date(v.timestamp).getTime() < 45000
+      );
+      _onCam2Status(fresh, cam2PollTimer);
+    } catch(e) {}
+  }, 6000);
+}
+
+function _onCam2Status(connected, pollTimer) {
+  const statusEl  = document.getElementById('cam2-connect-status');
+  const cornerEl  = document.getElementById('cam2-status');
+  const btn       = document.getElementById('btn-start-exam');
+
+  if (connected && !_cam2Connected) {
+    _cam2Connected = true;
+    // Phase-cam2: unlock start button
+    if (statusEl) {
+      statusEl.innerHTML = '✅ <strong>Camera 2 đã kết nối!</strong><br><span style="font-size:12px;color:#16a34a">Bạn có thể bắt đầu thi.</span>';
+      statusEl.style.color = '#16a34a';
+    }
+    if (btn) {
+      btn.disabled = false;
+      btn.style.background = '#2563eb';
+      btn.style.cursor = 'pointer';
+    }
+    // Small corner panel
+    if (cornerEl) { cornerEl.textContent = '✅ Cam2 OK'; cornerEl.className = 'connected'; }
+  }
+
+  if (!connected && _cam2Connected) {
+    // Phone disconnected DURING exam → violation
+    _cam2Connected = false;
+    if (cornerEl) { cornerEl.textContent = '⚠️ Cam2 mất'; cornerEl.className = 'warning'; }
+    recordViolation('Camera 2 mất kết nối', 'cam2_disconnected', 'high');
+  }
+}
+
+const _lastWarningTime = {};
+
+function recordViolationDebounced(reason, type, severity, cooldownMs) {
+  const now = Date.now();
+  if (_lastWarningTime[type] && now - _lastWarningTime[type] < (cooldownMs || 30000)) return;
+  _lastWarningTime[type] = now;
+  recordViolation(reason, type, severity);
+}
+
+// ════════════════════════════════════════════════
+// Submit
+// ════════════════════════════════════════════════
+function confirmSubmit() {
+  if (submitted) return;
+  let total, answered;
+  if (pdfMode) {
+    total    = Object.keys(pdfAnswers).length;
+    answered = Object.values(pdfAnswers).filter(v => v.trim() !== '').length;
+  } else {
+    total    = questions.length;
+    answered = Object.values(answers).filter(a => a.answer && a.answer.trim() !== '').length;
+  }
+  document.getElementById('ans-done').textContent  = answered;
+  document.getElementById('ans-total').textContent = total;
+  openModal('submit-modal');
+}
+
+function submitExam() {
+  if (submitted) return;
+  submitted = true;
+  closeModal('submit-modal');
+  clearInterval(timerInterval);
+
+  Object.keys(answers).forEach(qId => { if (answers[qId].focusStart) onQBlur(qId); });
+
+  document.getElementById('btn-submit').disabled = true;
+  document.getElementById('btn-submit').textContent = '⏳ Đang nộp bài...';
+  localStorage.removeItem('lms_draft'); // clear draft on intentional submit
+
+  const payload = buildSubmitPayload();
+
+  gas('submitExam', payload).then(res => {
+    if (res.success) {
+      showResult(res.data);
+      if (webcamStream) webcamStream.getTracks().forEach(t => t.stop());
+      sessionStorage.removeItem('lms_student');
+      sessionStorage.removeItem('lms_exam_id');
+    } else {
+      alert('Lỗi nộp bài: ' + res.error);
+      document.getElementById('btn-submit').disabled = false;
+      document.getElementById('btn-submit').textContent = '📤 Nộp bài';
+      submitted = false;
+    }
+  }).catch(e => {
+    alert('Lỗi kết nối khi nộp bài: ' + e.message);
+    submitted = false;
+    document.getElementById('btn-submit').disabled = false;
+    document.getElementById('btn-submit').textContent = '📤 Nộp bài';
+  });
+}
+
+function showResult(data) {
+  const screen = document.getElementById('result-screen');
+  screen.classList.add('show');
+
+  const scoreEl = document.getElementById('final-score');
+
+  if (pdfMode) {
+    scoreEl.textContent = '✓';
+    scoreEl.style.color = '#16a34a';
+    document.getElementById('final-score-label').textContent = 'Đã nộp bài';
+    let msg = '';
+    if (data.flagged) {
+      msg = `<span style="color:#dc2626">⚠️ Bài thi bị đánh dấu vi phạm và sẽ được giáo viên xem xét.</span><br><br>`;
+    }
+    msg += `Giáo viên sẽ chấm điểm và thông báo kết quả sau.<br>
+            Mã nộp bài: <code>${data.submission_id}</code>`;
+    document.getElementById('result-msg').innerHTML = msg;
+  } else {
+    const pct = data.max_score > 0 ? Math.round(data.total_score / data.max_score * 100) : 0;
+    scoreEl.textContent = `${data.total_score}/${data.max_score}`;
+    document.getElementById('final-score-label').textContent = `câu đúng (${pct}%) — Trắc nghiệm`;
+    let msg = '';
+    if (data.flagged) {
+      msg = `<span style="color:#dc2626">⚠️ Bài thi bị đánh dấu vi phạm và sẽ được giáo viên xem xét.</span><br><br>`;
+    }
+    msg += `Câu tự luận (nếu có) sẽ được giáo viên chấm và cập nhật điểm sau.<br>
+            Mã nộp bài: <code>${data.submission_id}</code>`;
+    document.getElementById('result-msg').innerHTML = msg;
+    if (pct >= 80) scoreEl.style.color = '#16a34a';
+    else if (pct >= 50) scoreEl.style.color = '#d97706';
+    else scoreEl.style.color = '#dc2626';
+  }
+}
+
+// ════════════════════════════════════════════════
+// Modal helpers
+// ════════════════════════════════════════════════
+function openModal(id)  { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+// ════════════════════════════════════════════════
+// Block copy/paste on page text (belt-and-suspenders)
+// ════════════════════════════════════════════════
+document.addEventListener('copy',  e => e.preventDefault());
+document.addEventListener('paste', e => e.preventDefault());
+document.addEventListener('cut',   e => e.preventDefault());
+</script>
+</body>
+</html>

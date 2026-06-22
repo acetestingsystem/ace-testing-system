@@ -1,0 +1,1239 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ACE Testing System — Giám Khảo</title>
+<style>
+  :root {
+    --primary: #c8102e;
+    --primary-dark: #9b0e24;
+    --gold: #f59e0b;
+    --danger: #dc2626;
+    --success: #16a34a;
+    --warning: #d97706;
+    --bg: #f8f5f5;
+    --sidebar-bg: #7f1d1d;
+    --sidebar-text: #fca5a5;
+    --card-bg: #ffffff;
+    --border: #e2e8f0;
+    --text: #1e293b;
+    --text-muted: #64748b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  #sidebar {
+    width: 240px; background: var(--sidebar-bg); color: var(--sidebar-text);
+    display: flex; flex-direction: column; flex-shrink: 0; position: fixed; top: 0; left: 0; height: 100vh; z-index: 100;
+  }
+  #sidebar .logo { padding: 16px; border-bottom: 1px solid #991b1b; display:flex; align-items:center; gap:10px; }
+  #sidebar .logo img { width:38px; height:38px; object-fit:contain; border-radius:6px; background:#fff; padding:2px; }
+  #sidebar .logo .logo-name { font-size:14px; font-weight:800; color:#fff; line-height:1.3; }
+  #sidebar .logo .logo-sub  { font-size:10px; color:#fca5a5; }
+  #sidebar nav a {
+    display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+    color: var(--sidebar-text); text-decoration: none; font-size: 14px; transition: background .15s;
+  }
+  #sidebar nav a:hover, #sidebar nav a.active { background: #991b1b; color: #fff; }
+  #sidebar nav a .icon { font-size: 18px; width: 24px; text-align: center; }
+
+  /* Main */
+  #main { margin-left: 240px; flex: 1; display: flex; flex-direction: column; }
+  #topbar { background: var(--card-bg); border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 50; }
+  #topbar h1 { font-size: 16px; font-weight: 600; }
+  #content { padding: 24px; flex: 1; }
+
+  /* Cards */
+  .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+  .card-title { font-size: 15px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+
+  /* Buttons */
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: 500; transition: opacity .15s; }
+  .btn:hover { opacity: .85; }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-danger  { background: var(--danger);  color: #fff; }
+  .btn-success { background: var(--success); color: #fff; }
+  .btn-warning { background: var(--warning); color: #fff; }
+  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+  /* Forms */
+  .form-group { margin-bottom: 14px; }
+  .form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; color: var(--text-muted); }
+  .form-group input, .form-group select, .form-group textarea {
+    width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 13px; background: #fff; color: var(--text);
+  }
+  .form-group textarea { resize: vertical; min-height: 60px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: var(--bg); font-weight: 600; text-align: left; padding: 10px 12px; border-bottom: 2px solid var(--border); }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:hover td { background: #f8fafc; }
+
+  /* Badges */
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .badge-success { background: #dcfce7; color: var(--success); }
+  .badge-danger  { background: #fee2e2; color: var(--danger); }
+  .badge-warning { background: #fef3c7; color: var(--warning); }
+  .badge-info    { background: #dbeafe; color: var(--primary); }
+
+  /* Panels */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* Question editor */
+  .q-card { border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 12px; background: #fafafa; }
+  .q-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+  .q-num { font-weight: 700; font-size: 13px; color: var(--primary); }
+  .q-type-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+  .mc { background: #dbeafe; color: var(--primary); }
+  .sa { background: #f0fdf4; color: var(--success); }
+
+  /* Upload area */
+  .upload-area {
+    border: 2px dashed var(--border); border-radius: 8px; padding: 40px 20px;
+    text-align: center; cursor: pointer; transition: border-color .2s;
+  }
+  .upload-area:hover, .upload-area.drag-over { border-color: var(--primary); background: #eff6ff; }
+  .upload-area .upload-icon { font-size: 40px; margin-bottom: 8px; }
+
+  /* Progress */
+  .progress-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--primary); transition: width .3s; }
+
+  /* Snapshots grid */
+  .violation-row-high { background: #fef2f2; }
+  .violation-row-medium { background: #fffbeb; }
+  .badge-high { background: #dc2626; color: #fff; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+  .badge-medium { background: #d97706; color: #fff; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+  #violations-summary { display: flex; gap: 12px; margin-bottom: 16px; }
+  .vio-stat { padding: 10px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; }
+  .vio-stat-high { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+  .vio-stat-med  { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+  .vio-stat-total{ background: #f0f9ff; color: #0369a1; border: 1px solid #bae6fd; }
+
+  /* Modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 200; align-items: center; justify-content: center; }
+  .modal-overlay.show { display: flex; }
+  .modal { background: #fff; border-radius: 10px; padding: 24px; width: 560px; max-width: 95vw; max-height: 90vh; overflow-y: auto; }
+  .modal h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+  .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+
+  /* Alerts */
+  .alert { padding: 12px 16px; border-radius: 6px; font-size: 13px; margin-bottom: 16px; }
+  .alert-success { background: #f0fdf4; color: var(--success); border: 1px solid #bbf7d0; }
+  .alert-danger  { background: #fff1f2; color: var(--danger);  border: 1px solid #fecdd3; }
+  .alert-info    { background: #eff6ff; color: var(--primary); border: 1px solid #bfdbfe; }
+
+  /* Stats */
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .stat-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; text-align: center; }
+  .stat-card .stat-num { font-size: 28px; font-weight: 700; color: var(--primary); }
+  .stat-card .stat-label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+  .loader { display: inline-block; width: 16px; height: 16px; border: 2px solid #e2e8f0; border-top-color: var(--primary); border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty-state { text-align: center; padding: 40px; color: var(--text-muted); }
+  .empty-state .icon { font-size: 48px; }
+
+  /* Admin login overlay */
+  #admin-login-overlay {
+    position: fixed; inset: 0; z-index: 9999;
+    background: linear-gradient(150deg, #7f1d1d 0%, #991b1b 35%, #c8102e 65%, #b91c1c 100%);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #admin-login-box {
+    background: #fff; border-radius: 18px; padding: 36px 32px;
+    width: 100%; max-width: 380px; box-shadow: 0 24px 64px rgba(0,0,0,.35);
+  }
+  #admin-login-box .brand { text-align: center; margin-bottom: 24px; }
+  #admin-login-box img { width: 64px; height: 64px; object-fit: contain; border-radius: 12px; }
+  #admin-login-box h2 { font-size: 20px; font-weight: 800; color: #c8102e; margin-top: 10px; }
+  #admin-login-box p  { font-size: 12px; color: #64748b; margin-top: 2px; }
+  #admin-login-box input {
+    width: 100%; padding: 12px 14px; border: 1.5px solid #e2e8f0; border-radius: 9px;
+    font-size: 14px; outline: none; margin: 16px 0 8px;
+  }
+  #admin-login-box input:focus { border-color: #c8102e; }
+  #admin-login-box .btn-login {
+    width: 100%; padding: 13px; background: #c8102e; color: #fff;
+    border: none; border-radius: 9px; font-size: 15px; font-weight: 700;
+    cursor: pointer;
+  }
+  #admin-login-box .btn-login:hover { background: #9b0e24; }
+  #admin-login-err { color: #dc2626; font-size: 13px; text-align: center; margin-top: 10px; display: none; }
+</style>
+</head>
+<body>
+
+<!-- Admin login overlay -->
+<div id="admin-login-overlay">
+  <div id="admin-login-box">
+    <div class="brand">
+      <img src="https://lh3.googleusercontent.com/d/1jtxhRrUxip69b4VqgqAR9joCsZ2dDx79" alt="ACE" onerror="this.style.display='none'">
+      <h2>ACE Testing System</h2>
+      <p>Đăng nhập dành cho Giám khảo</p>
+    </div>
+    <input type="password" id="overlay-pw" placeholder="Mật khẩu giám khảo"
+           onkeydown="if(event.key==='Enter') doAdminOverlayLogin()">
+    <button class="btn-login" onclick="doAdminOverlayLogin()" id="overlay-btn">Đăng nhập</button>
+    <div id="admin-login-err"></div>
+  </div>
+</div>
+
+<!-- Sidebar -->
+<aside id="sidebar">
+  <div class="logo">
+    <img src="https://lh3.googleusercontent.com/d/1jtxhRrUxip69b4VqgqAR9joCsZ2dDx79" alt="ACE" onerror="this.style.display='none'">
+    <div><div class="logo-name">ACE Testing</div><div class="logo-sub">Giám khảo</div></div>
+  </div>
+  <nav>
+    <a href="#" class="active" data-panel="dashboard" onclick="showPanel('dashboard',this)">
+      <span class="icon">📊</span> Tổng quan
+    </a>
+    <a href="#" data-panel="exams" onclick="showPanel('exams',this)">
+      <span class="icon">📝</span> Quản lý bài thi
+    </a>
+    <a href="#" data-panel="questions" onclick="showPanel('questions',this)">
+      <span class="icon">❓</span> Câu hỏi
+    </a>
+    <a href="#" data-panel="students" onclick="showPanel('students',this)">
+      <span class="icon">👥</span> Học sinh
+    </a>
+    <a href="#" data-panel="results" onclick="showPanel('results',this)">
+      <span class="icon">🏆</span> Kết quả thi
+    </a>
+    <a href="#" data-panel="violations" onclick="showPanel('violations',this)">
+      <span class="icon">🚨</span> Vi phạm
+    </a>
+    <a href="#" data-panel="config" onclick="showPanel('config',this)">
+      <span class="icon">⚙️</span> Cấu hình
+    </a>
+  </nav>
+</aside>
+
+<!-- Main -->
+<div id="main">
+  <header id="topbar">
+    <h1 id="topbar-title">Tổng quan</h1>
+    <span id="admin-badge" style="font-size:13px;color:#64748b;">Admin Panel</span>
+  </header>
+  <div id="content">
+
+    <!-- DASHBOARD -->
+    <div id="panel-dashboard" class="panel active">
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card"><div class="stat-num" id="stat-exams">—</div><div class="stat-label">Bài thi</div></div>
+        <div class="stat-card"><div class="stat-num" id="stat-students">—</div><div class="stat-label">Học sinh</div></div>
+        <div class="stat-card"><div class="stat-num" id="stat-submissions">—</div><div class="stat-label">Lượt nộp bài</div></div>
+        <div class="stat-card"><div class="stat-num" id="stat-flagged" style="color:#dc2626">—</div><div class="stat-label">Vi phạm</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">📋 Lượt nộp bài gần đây</div>
+        <table>
+          <thead><tr><th>Học sinh</th><th>Bài thi</th><th>Điểm</th><th>Vi phạm</th><th>Cờ</th><th>Thời gian</th></tr></thead>
+          <tbody id="recent-submissions"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- EXAMS -->
+    <div id="panel-exams" class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div></div>
+        <button class="btn btn-primary" onclick="openExamModal()">➕ Tạo bài thi mới</button>
+      </div>
+      <div class="card" style="padding:0;">
+        <table>
+          <thead><tr><th>Tên bài thi</th><th>Chi nhánh</th><th>Thời gian</th><th>Mở đề</th><th>Đóng đề</th><th>PDF</th><th>Hành động</th></tr></thead>
+          <tbody id="exams-table"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- QUESTIONS -->
+    <div id="panel-questions" class="panel">
+      <div class="card">
+        <div class="form-group">
+          <label>Chọn bài thi để quản lý câu hỏi</label>
+          <select id="q-exam-select" onchange="loadQuestionsForExam(this.value)" style="max-width:400px;">
+            <option value="">-- Chọn bài thi --</option>
+          </select>
+        </div>
+        <div id="pdf-upload-area" style="display:none;">
+          <div class="upload-area" id="drop-zone" onclick="document.getElementById('pdf-file-input').click()">
+            <div class="upload-icon">📄</div>
+            <p style="font-weight:600">Kéo thả PDF hoặc nhấn để chọn file</p>
+            <p style="font-size:12px;color:#64748b;margin-top:4px">Định dạng: PDF (tối đa 20MB)</p>
+          </div>
+          <input type="file" id="pdf-file-input" accept=".pdf" style="display:none" onchange="handlePdfSelect(this)">
+          <div id="upload-progress" style="display:none;margin-top:12px;">
+            <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+            <p id="upload-status" style="font-size:12px;margin-top:6px;color:#64748b;"></p>
+          </div>
+          <div id="generate-options" style="display:none;margin-top:16px;">
+            <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px;">
+              <p style="font-weight:600;color:#1e40af;margin-bottom:8px;">📄 Thi trực tiếp trên PDF</p>
+              <p style="font-size:13px;color:#64748b;margin-bottom:14px;">
+                Học sinh xem đề PDF và điền đáp án vào các ô đánh số. Giáo viên chấm điểm thủ công.
+              </p>
+              <div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;">
+                <div class="form-group" style="margin:0;">
+                  <label>Số câu hỏi trong đề</label>
+                  <input type="number" id="num-questions" value="10" min="1" max="200" style="width:100px;">
+                </div>
+                <button class="btn btn-primary" onclick="savePdfExamConfig()" id="save-pdf-btn">
+                  💾 Lưu cấu hình bài thi
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="questions-editor" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <b id="q-count-label"></b>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-outline btn-sm" onclick="addBlankQuestion('mc')">➕ Trắc nghiệm</button>
+            <button class="btn btn-outline btn-sm" onclick="addBlankQuestion('sa')">➕ Tự luận</button>
+            <button class="btn btn-success" onclick="saveQuestions()">💾 Lưu tất cả</button>
+          </div>
+        </div>
+        <div id="questions-list"></div>
+      </div>
+    </div>
+
+    <!-- STUDENTS -->
+    <div id="panel-students" class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div></div>
+        <button class="btn btn-primary" onclick="openStudentModal()">➕ Thêm học sinh</button>
+      </div>
+      <div class="card" style="padding:0;">
+        <table>
+          <thead><tr><th>Mã thí sinh</th><th>Họ tên</th><th>Chi nhánh</th><th>Email</th><th>Hành động</th></tr></thead>
+          <tbody id="students-table"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- RESULTS -->
+    <div id="panel-results" class="panel">
+      <div class="card">
+        <div class="form-group">
+          <label>Lọc theo bài thi</label>
+          <select id="result-exam-select" onchange="loadResults(this.value)" style="max-width:400px;">
+            <option value="">-- Tất cả bài thi --</option>
+          </select>
+        </div>
+      </div>
+      <div class="card" style="padding:0;">
+        <table>
+          <thead><tr><th>Thí sinh</th><th>Chi nhánh</th><th>Bài thi</th><th>Điểm</th><th>Vi phạm</th><th>Cờ</th><th>Nộp lúc</th><th>Hành động</th></tr></thead>
+          <tbody id="results-table"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- VIOLATIONS -->
+    <div id="panel-violations" class="panel">
+      <div class="card">
+        <div class="card-title">🚨 Vi phạm theo thời gian thực
+          <span id="vio-refresh-badge" style="font-size:11px;color:#64748b;font-weight:400;margin-left:8px;">Tự động làm mới mỗi 10s</span>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Lọc theo bài thi</label>
+            <select id="vio-exam-id">
+              <option value="">-- Tất cả bài thi --</option>
+            </select>
+          </div>
+          <div class="form-group" style="align-self:flex-end;display:flex;gap:8px;">
+            <button class="btn btn-primary" onclick="loadViolations()">🔍 Tải vi phạm</button>
+            <button class="btn btn-outline" onclick="testLogViolation()" title="Thêm vi phạm test để kiểm tra GAS">🧪 Test GAS</button>
+          </div>
+        </div>
+        <div id="violations-summary"></div>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div style="overflow-x:auto;">
+          <table class="data-table">
+            <thead><tr><th>Thời gian</th><th>Học sinh</th><th>Bài thi</th><th>Loại</th><th>Chi tiết</th><th>Mức độ</th></tr></thead>
+            <tbody id="violations-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONFIG -->
+    <div id="panel-config" class="panel">
+      <div class="card">
+        <div class="card-title">⚙️ Cấu hình hệ thống</div>
+        <div id="config-status" class="alert alert-info" style="display:none;"></div>
+        <div class="form-group">
+          <label>Claude API Key</label>
+          <input type="password" id="cfg-claude-key" placeholder="sk-ant-...">
+        </div>
+        <div class="form-group">
+          <label>Google Drive Folder ID (thư mục chứa file thi)</label>
+          <input type="text" id="cfg-folder-id" placeholder="ID thư mục Google Drive">
+          <small style="color:#64748b;font-size:11px;">Lấy từ URL: drive.google.com/drive/folders/<b>FOLDER_ID</b></small>
+        </div>
+        <div class="form-group">
+          <label>Email Admin nhận cảnh báo</label>
+          <input type="email" id="cfg-admin-email" placeholder="admin@school.edu.vn">
+        </div>
+        <button class="btn btn-primary" onclick="saveConfig()">💾 Lưu cấu hình</button>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- MODAL: Exam -->
+<div class="modal-overlay" id="exam-modal">
+  <div class="modal">
+    <h2 id="exam-modal-title">Tạo bài thi mới</h2>
+    <input type="hidden" id="exam-id-field">
+    <div class="form-group">
+      <label>Tên bài thi *</label>
+      <input type="text" id="exam-title" placeholder="VD: Kiểm tra Toán giữa kỳ">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Thời gian làm bài (phút)</label>
+        <input type="number" id="exam-time" value="45" min="5">
+      </div>
+      <div class="form-group">
+        <label>Chi nhánh được thi (để trống = tất cả)</label>
+        <input type="text" id="exam-class" placeholder="VD: Quận 1, Bình Dương...">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Ngày mở đề</label>
+        <input type="datetime-local" id="exam-open">
+      </div>
+      <div class="form-group">
+        <label>Ngày đóng đề</label>
+        <input type="datetime-local" id="exam-close">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('exam-modal')">Hủy</button>
+      <button class="btn btn-primary" onclick="saveExam()">💾 Lưu bài thi</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Student -->
+<div class="modal-overlay" id="student-modal">
+  <div class="modal">
+    <h2 id="student-modal-title">Thêm thí sinh</h2>
+    <input type="hidden" id="student-id-field">
+    <!-- Show auto-generated ID when editing -->
+    <div id="st-id-display" style="display:none;margin-bottom:14px;padding:10px 14px;background:#f8f5f5;border-radius:8px;font-size:13px;">
+      <span style="color:#64748b;">Mã thí sinh:</span>
+      <strong id="st-id-value" style="color:#c8102e;font-size:15px;margin-left:8px;"></strong>
+    </div>
+    <input type="hidden" id="st-id">
+    <div class="form-group">
+      <label>Họ và tên *</label>
+      <input type="text" id="st-name" placeholder="Nguyễn Văn A">
+    </div>
+    <div class="form-group">
+      <label>Chi nhánh *</label>
+      <input type="text" id="st-class" placeholder="VD: Quận 1, Bình Dương...">
+    </div>
+    <div class="form-group">
+      <label>Mật khẩu <span id="st-pw-hint" style="font-weight:400;color:#94a3b8;">(để trống = giữ nguyên)</span></label>
+      <input type="password" id="st-password" placeholder="Nhập mật khẩu...">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('student-modal')">Hủy</button>
+      <button class="btn btn-primary" onclick="saveStudent()">💾 Lưu</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Result Detail -->
+<div class="modal-overlay" id="result-modal">
+  <div class="modal" style="width:700px;">
+    <h2>Chi tiết bài làm</h2>
+    <div id="result-detail-content"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('result-modal')">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ======================== Config ========================
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxeWng8djn2nsp26i4CinFZGlsQlGOFiUF4UAKO56uDWlAfbYlOTcjbvyHXiEPTda8K/exec';
+
+// ======================== State ========================
+let exams = [];
+let currentExamId = null;
+let currentQuestions = [];
+let currentPdfFileId = null;
+
+// ======================== Routing ========================
+function showPanel(name, el) {
+  stopViolationsAutoRefresh();
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('#sidebar nav a').forEach(a => a.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  if (el) el.classList.add('active');
+  const titles = {
+    dashboard: 'Tổng quan', exams: 'Quản lý bài thi', questions: 'Câu hỏi',
+    students: 'Học sinh', results: 'Kết quả thi', violations: 'Vi phạm', config: 'Cấu hình'
+  };
+  document.getElementById('topbar-title').textContent = titles[name] || name;
+  if (name === 'dashboard') loadDashboard();
+  if (name === 'exams') loadExams();
+  if (name === 'students') loadStudents();
+  if (name === 'results') { loadExamsForSelect('result-exam-select'); loadResults(''); }
+  if (name === 'questions') loadExamsForSelect('q-exam-select');
+  if (name === 'violations') { loadExamsForSelect('vio-exam-id'); loadViolations(); startViolationsAutoRefresh(); }
+  return false;
+}
+
+// ======================== Helpers ========================
+async function gas(fn, ...args) {
+  // Convert 'apiGetExams' -> 'getExams' for dispatch table
+  const action = fn.startsWith('api')
+    ? fn.charAt(3).toLowerCase() + fn.slice(4)
+    : fn;
+  const body = JSON.stringify({ action, args });
+  try {
+    const resp = await fetch(GAS_URL, {
+      method: 'POST', body,
+      headers: { 'Content-Type': 'text/plain' }
+    });
+    const text = await resp.text();
+    try { return JSON.parse(text); } catch(e) { return { success: false, error: text }; }
+  } catch(e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function toast(msg, type='info') {
+  const el = document.createElement('div');
+  el.style.cssText = `position:fixed;top:16px;right:16px;z-index:9999;padding:12px 18px;
+    border-radius:8px;font-size:13px;font-weight:500;max-width:320px;
+    background:${type==='success'?'#16a34a':type==='error'?'#dc2626':'#2563eb'};color:#fff;
+    box-shadow:0 4px 12px rgba(0,0,0,.15);`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+function openModal(id)  { document.getElementById(id).classList.add('show'); }
+
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleString('vi-VN', { hour12: false });
+}
+
+function loadExamsForSelect(selectId) {
+  gas('apiGetExams').then(res => {
+    if (!res.success) return;
+    exams = res.data;
+    const sel = document.getElementById(selectId);
+    const cur = sel.value;
+    Array.from(sel.options).filter(o => o.value !== '').forEach(o => o.remove());
+    exams.forEach(ex => {
+      const opt = new Option(ex.title, ex.exam_id);
+      sel.add(opt);
+    });
+    if (cur) sel.value = cur;
+  });
+}
+
+// ======================== Dashboard ========================
+function loadDashboard() {
+  gas('apiGetStudents').then(res => {
+    if (res.success) document.getElementById('stat-students').textContent = res.data.length;
+  });
+  gas('apiGetExams').then(res => {
+    if (res.success) document.getElementById('stat-exams').textContent = res.data.length;
+  });
+  gas('apiGetAllResults').then(res => {
+    if (!res.success) return;
+    const subs = res.data;
+    document.getElementById('stat-submissions').textContent = subs.length;
+    document.getElementById('stat-flagged').textContent = subs.filter(s => s.flagged).length;
+    const tbody = document.getElementById('recent-submissions');
+    const recent = [...subs].sort((a,b) => b.submitted_at > a.submitted_at ? 1 : -1).slice(0,10);
+    tbody.innerHTML = recent.map(s => `
+      <tr>
+        <td>${s.student_name}</td>
+        <td>${s.exam_title}</td>
+        <td><b>${s.total_score}/${s.max_score}</b></td>
+        <td>${s.violation_count}</td>
+        <td>${s.flagged ? '<span class="badge badge-danger">⚠️ Vi phạm</span>' : '<span class="badge badge-success">OK</span>'}</td>
+        <td>${fmtDate(s.submitted_at)}</td>
+      </tr>`).join('') || '<tr><td colspan="6" class="empty-state">Chưa có dữ liệu</td></tr>';
+  });
+}
+
+// ======================== Exams ========================
+function loadExams() {
+  gas('apiGetExams').then(res => {
+    if (!res.success) { toast(res.error, 'error'); return; }
+    exams = res.data;
+    const tbody = document.getElementById('exams-table');
+    tbody.innerHTML = exams.map(ex => `
+      <tr>
+        <td><b>${ex.title}</b></td>
+        <td>${ex.assigned_class || 'Tất cả'}</td>
+        <td>${ex.time_limit} phút</td>
+        <td>${fmtDate(ex.open_date)}</td>
+        <td>${fmtDate(ex.close_date)}</td>
+        <td>${ex.pdf_name ? `<a href="${ex.pdf_url}" target="_blank" style="color:var(--primary)">📄 ${ex.pdf_name}</a>` : '—'}</td>
+        <td>
+          <button class="btn btn-outline btn-sm" onclick="openExamModal('${ex.exam_id}')">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteExam('${ex.exam_id}')">🗑️</button>
+        </td>
+      </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;padding:20px;color:#64748b;">Chưa có bài thi nào</td></tr>';
+  });
+}
+
+// Convert local datetime-local input value → UTC ISO string for storage in GAS/Sheet
+function toUTCISO(localStr) {
+  if (!localStr) return '';
+  const d = new Date(localStr); // browser treats datetime-local as local timezone
+  return isNaN(d.getTime()) ? '' : d.toISOString();
+}
+
+// Convert ISO/UTC date string → local datetime-local input value (YYYY-MM-DDTHH:MM)
+function toLocalInput(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return String(dateStr).substring(0, 16);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function openExamModal(examId) {
+  if (examId) {
+    const ex = exams.find(e => e.exam_id === examId);
+    if (!ex) return;
+    document.getElementById('exam-modal-title').textContent = 'Chỉnh sửa bài thi';
+    document.getElementById('exam-id-field').value  = ex.exam_id;
+    document.getElementById('exam-title').value      = ex.title;
+    document.getElementById('exam-time').value       = ex.time_limit;
+    document.getElementById('exam-class').value      = ex.assigned_class || '';
+    document.getElementById('exam-open').value       = toLocalInput(ex.open_date);
+    document.getElementById('exam-close').value      = toLocalInput(ex.close_date);
+    // Store current PDF info so edit doesn't wipe it
+    document.getElementById('exam-id-field').dataset.pdfUrl  = ex.pdf_url  || '';
+    document.getElementById('exam-id-field').dataset.pdfName = ex.pdf_name || '';
+  } else {
+    document.getElementById('exam-modal-title').textContent = 'Tạo bài thi mới';
+    document.getElementById('exam-id-field').value = '';
+    document.getElementById('exam-id-field').dataset.pdfUrl  = '';
+    document.getElementById('exam-id-field').dataset.pdfName = '';
+    ['exam-title','exam-class','exam-open','exam-close'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('exam-time').value = '45';
+  }
+  openModal('exam-modal');
+}
+
+async function saveExam() {
+  const title = document.getElementById('exam-title').value.trim();
+  if (!title) { toast('Vui lòng nhập tên bài thi', 'error'); return; }
+  const examIdField = document.getElementById('exam-id-field');
+  const isEdit = !!examIdField.value;
+  const data = {
+    exam_id:        examIdField.value || null,
+    title:          title,
+    time_limit:     document.getElementById('exam-time').value,
+    assigned_class: document.getElementById('exam-class').value.trim(),
+    open_date:      toUTCISO(document.getElementById('exam-open').value),
+    close_date:     toUTCISO(document.getElementById('exam-close').value),
+  };
+  // Preserve existing PDF when editing — only set empty string for new exams
+  if (isEdit) {
+    data.pdf_url  = examIdField.dataset.pdfUrl  || '';
+    data.pdf_name = examIdField.dataset.pdfName || '';
+  } else {
+    data.pdf_url  = '';
+    data.pdf_name = '';
+  }
+  try {
+    const res = await gas('apiSaveExam', data);
+    if (res.success) { toast('Đã lưu bài thi!', 'success'); closeModal('exam-modal'); loadExams(); }
+    else { toast('Lỗi: ' + (res.error || JSON.stringify(res)), 'error'); }
+  } catch(e) {
+    toast('Lỗi kết nối: ' + e.message, 'error');
+    alert('Chi tiết lỗi: ' + e.message);
+  }
+}
+
+async function deleteExam(examId) {
+  if (!confirm('Xóa bài thi này? Toàn bộ câu hỏi liên quan cũng bị xóa.')) return;
+  const res = await gas('apiDeleteExam', examId);
+  if (res.success) { toast('Đã xóa!', 'success'); loadExams(); }
+  else toast(res.error, 'error');
+}
+
+// ======================== Questions ========================
+async function loadQuestionsForExam(examId) {
+  currentExamId = examId;
+  currentPdfFileId = null;
+  document.getElementById('pdf-upload-area').style.display = examId ? 'block' : 'none';
+  document.getElementById('questions-editor').style.display = 'none';
+  document.getElementById('generate-options').style.display = 'none';
+  if (!examId) return;
+
+  // Fetch exam info for PDF and question_count
+  const examRes = await gas('apiGetExam', examId);
+  if (examRes.success && examRes.data.pdf_url) {
+    currentPdfFileId = examRes.data.pdf_file_id || null;
+    const qCount = parseInt(examRes.data.question_count) || 10;
+    document.getElementById('num-questions').value = qCount;
+    document.getElementById('generate-options').style.display = 'block';
+    // Show existing PDF name
+    const status = document.getElementById('upload-status');
+    if (examRes.data.pdf_name) {
+      status.textContent = '✅ Đã có PDF: ' + examRes.data.pdf_name;
+      status.style.color = '#16a34a';
+      document.getElementById('upload-progress').style.display = 'block';
+    }
+  }
+}
+
+// PDF Upload
+function handlePdfSelect(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.type !== 'application/pdf') { toast('Vui lòng chọn file PDF', 'error'); return; }
+  if (file.size > 20 * 1024 * 1024) { toast('File tối đa 20MB', 'error'); return; }
+  uploadPdf(file);
+}
+
+const dz = document.getElementById('drop-zone');
+if (dz) {
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) { document.getElementById('pdf-file-input').files = e.dataTransfer.files; uploadPdf(file); }
+  });
+}
+
+function uploadPdf(file) {
+  if (!currentExamId) { toast('Vui lòng chọn bài thi trước', 'error'); return; }
+  const progress = document.getElementById('upload-progress');
+  const fill = document.getElementById('progress-fill');
+  const status = document.getElementById('upload-status');
+  progress.style.display = 'block';
+  fill.style.width = '30%';
+  status.textContent = 'Đang đọc file...';
+
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    fill.style.width = '60%';
+    status.textContent = 'Đang tải lên Drive...';
+    const base64 = e.target.result.split(',')[1];
+    const res = await gas('apiUploadPDF', base64, file.name, file.type);
+    fill.style.width = '100%';
+    if (res.success) {
+      currentPdfFileId = res.data.fileId;
+      status.textContent = '✅ Upload thành công: ' + res.data.fileName;
+      status.style.color = '#16a34a';
+      document.getElementById('generate-options').style.display = 'block';
+      // Save PDF info to exam
+      await gas('apiSaveExam', {
+        exam_id: currentExamId,
+        pdf_url: res.data.fileUrl,
+        pdf_file_id: res.data.fileId,
+        pdf_name: res.data.fileName
+      });
+      toast('PDF đã được tải lên!', 'success');
+    } else {
+      status.textContent = '❌ ' + res.error;
+      status.style.color = '#dc2626';
+      toast(res.error, 'error');
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+async function savePdfExamConfig() {
+  if (!currentExamId) { toast('Chưa chọn bài thi', 'error'); return; }
+  const numQ = parseInt(document.getElementById('num-questions').value) || 10;
+  const btn = document.getElementById('save-pdf-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loader"></span> Đang lưu...';
+  const res = await gas('apiSaveExam', { exam_id: currentExamId, question_count: numQ });
+  btn.disabled = false;
+  btn.innerHTML = '💾 Lưu cấu hình bài thi';
+  if (res.success) toast(`Đã lưu: ${numQ} câu hỏi. Học sinh sẽ thấy ${numQ} ô điền đáp án.`, 'success');
+  else toast(res.error, 'error');
+}
+
+function renderQuestionsEditor() {
+  document.getElementById('questions-editor').style.display = 'block';
+  document.getElementById('q-count-label').textContent = `${currentQuestions.length} câu hỏi`;
+  const list = document.getElementById('questions-list');
+  list.innerHTML = currentQuestions.map((q, i) => buildQuestionCard(q, i)).join('');
+}
+
+function buildQuestionCard(q, i) {
+  const isMC = q.type === 'mc';
+  return `
+  <div class="q-card" id="qcard-${i}">
+    <div class="q-card-header">
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span class="q-num">Câu ${i+1}</span>
+        <select class="q-type-badge ${q.type}" onchange="changeQType(${i},this.value)">
+          <option value="mc" ${isMC?'selected':''}>Trắc nghiệm</option>
+          <option value="sa" ${!isMC?'selected':''}>Tự luận</option>
+        </select>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="removeQuestion(${i})">🗑️</button>
+    </div>
+    <div class="form-group">
+      <label>Nội dung câu hỏi</label>
+      <textarea id="qt-${i}" rows="2">${q.question_text||''}</textarea>
+    </div>
+    ${isMC ? `
+    <div class="form-row">
+      <div class="form-group"><label>A.</label><input type="text" id="qa-${i}" value="${q.option_a||''}"></div>
+      <div class="form-group"><label>B.</label><input type="text" id="qb-${i}" value="${q.option_b||''}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>C.</label><input type="text" id="qc-${i}" value="${q.option_c||''}"></div>
+      <div class="form-group"><label>D.</label><input type="text" id="qd-${i}" value="${q.option_d||''}"></div>
+    </div>
+    <div class="form-group">
+      <label>Đáp án đúng</label>
+      <select id="qans-${i}">
+        ${['A','B','C','D'].map(k => `<option ${q.correct_answer===k?'selected':''}>${k}</option>`).join('')}
+      </select>
+    </div>` : `<p style="font-size:12px;color:#64748b;font-style:italic;">Câu tự luận — giáo viên chấm điểm thủ công</p>`}
+  </div>`;
+}
+
+function changeQType(i, type) {
+  currentQuestions[i].type = type;
+  renderQuestionsEditor();
+}
+
+function removeQuestion(i) {
+  currentQuestions.splice(i, 1);
+  renderQuestionsEditor();
+}
+
+function addBlankQuestion(type) {
+  currentQuestions.push({ type, question_text: '', option_a:'', option_b:'', option_c:'', option_d:'', correct_answer:'A' });
+  renderQuestionsEditor();
+  setTimeout(() => document.getElementById('qcard-' + (currentQuestions.length-1))?.scrollIntoView({behavior:'smooth'}), 100);
+}
+
+function collectQuestions() {
+  return currentQuestions.map((q, i) => ({
+    ...q,
+    question_text: document.getElementById('qt-'+i)?.value.trim() || '',
+    option_a:  q.type==='mc' ? (document.getElementById('qa-'+i)?.value||'') : '',
+    option_b:  q.type==='mc' ? (document.getElementById('qb-'+i)?.value||'') : '',
+    option_c:  q.type==='mc' ? (document.getElementById('qc-'+i)?.value||'') : '',
+    option_d:  q.type==='mc' ? (document.getElementById('qd-'+i)?.value||'') : '',
+    correct_answer: q.type==='mc' ? (document.getElementById('qans-'+i)?.value||'A') : ''
+  }));
+}
+
+async function saveQuestions() {
+  if (!currentExamId) { toast('Chưa chọn bài thi', 'error'); return; }
+  const qs = collectQuestions();
+  const res = await gas('apiSaveQuestions', currentExamId, qs);
+  if (res.success) toast(`Đã lưu ${res.data} câu hỏi!`, 'success');
+  else toast(res.error, 'error');
+}
+
+// ======================== Students ========================
+function loadStudents() {
+  gas('apiGetStudents').then(res => {
+    if (!res.success) return;
+    const tbody = document.getElementById('students-table');
+    tbody.innerHTML = res.data.map(s => `
+      <tr>
+        <td><code style="font-size:12px;">${s.student_id}</code></td>
+        <td>${s.name}</td>
+        <td>${s.class || s.branch || '—'}</td>
+        <td>${s.email || '—'}</td>
+        <td>
+          <button class="btn btn-outline btn-sm" onclick='openStudentModal(${JSON.stringify(s)})'>✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteStudent('${s.student_id}')">🗑️</button>
+        </td>
+      </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;padding:20px;color:#64748b;">Chưa có thí sinh</td></tr>';
+  });
+}
+
+function openStudentModal(data) {
+  if (data) {
+    document.getElementById('student-modal-title').textContent = 'Chỉnh sửa thí sinh';
+    document.getElementById('student-id-field').value = data.student_id;
+    document.getElementById('st-id').value    = data.student_id;
+    document.getElementById('st-id-value').textContent = data.student_id;
+    document.getElementById('st-id-display').style.display = 'block';
+    document.getElementById('st-name').value  = data.name;
+    document.getElementById('st-class').value = data.class || data.branch || '';
+    document.getElementById('st-pw-hint').textContent = '(để trống = giữ nguyên)';
+  } else {
+    document.getElementById('student-modal-title').textContent = 'Thêm thí sinh mới';
+    document.getElementById('student-id-field').value = '';
+    document.getElementById('st-id').value = '';
+    document.getElementById('st-id-display').style.display = 'none';
+    ['st-name','st-class','st-password'].forEach(id => document.getElementById(id).value='');
+    document.getElementById('st-pw-hint').textContent = '(bắt buộc cho thí sinh mới)';
+  }
+  document.getElementById('st-password').value = '';
+  openModal('student-modal');
+}
+
+async function saveStudent() {
+  const existingId = document.getElementById('student-id-field').value.trim();
+  const name = document.getElementById('st-name').value.trim();
+  const branch = document.getElementById('st-class').value.trim();
+  const password = document.getElementById('st-password').value;
+  if (!name || !branch) { toast('Vui lòng nhập tên và chi nhánh', 'error'); return; }
+  if (!existingId && !password) { toast('Vui lòng nhập mật khẩu cho thí sinh mới', 'error'); return; }
+
+  // New candidate: auto-generate ID via registerCandidate
+  if (!existingId) {
+    const res = await gas('apiRegisterCandidate', name, branch, password);
+    if (!res.success) { toast('Lỗi: ' + res.error, 'error'); return; }
+    toast(`Đã tạo thí sinh! Mã: ${res.data.student_id}`, 'success');
+    closeModal('student-modal'); loadStudents();
+    return;
+  }
+
+  // Edit existing
+  const res = await gas('apiSaveStudent', {
+    student_id: existingId, name,
+    class: branch,
+    email: '',
+    password: password
+  });
+  if (res.success) { toast('Đã lưu!', 'success'); closeModal('student-modal'); loadStudents(); }
+  else toast(res.error, 'error');
+}
+
+async function deleteStudent(id) {
+  if (!confirm('Xóa học sinh ' + id + '?')) return;
+  const res = await gas('apiDeleteStudent', id);
+  if (res.success) { toast('Đã xóa!', 'success'); loadStudents(); }
+  else toast(res.error, 'error');
+}
+
+// ======================== Results ========================
+function loadResults(examId) {
+  const fn = examId ? gas('apiGetResults', examId) : gas('apiGetAllResults');
+  fn.then(res => {
+    if (!res.success) return;
+    const data = examId ? res.data.results : res.data;
+    const tbody = document.getElementById('results-table');
+    tbody.innerHTML = (data||[]).map(s => `
+      <tr>
+        <td>
+          ${s.webcam_folder_url ? `<img src="${s.webcam_folder_url}" style="width:32px;height:32px;object-fit:cover;border-radius:50%;margin-right:6px;vertical-align:middle;border:2px solid #e2e8f0">` : ''}
+          ${s.student_name}
+        </td>
+        <td>${s.student_class || '—'}</td>
+        <td>${s.exam_title || s.exam_id}</td>
+        <td><b>${s.total_score !== '' && s.total_score !== undefined ? s.total_score + '/' + s.max_score : '—'}</b></td>
+        <td>${s.violation_count}</td>
+        <td>${s.flagged ? '<span class="badge badge-danger">⚠️ Gian lận</span>' : '<span class="badge badge-success">Bình thường</span>'}</td>
+        <td style="font-size:12px;">${fmtDate(s.submitted_at)}</td>
+        <td style="white-space:nowrap;">
+          <button class="btn btn-outline btn-sm" onclick="showResultDetail('${s.submission_id}')">🔍 Xem</button>
+          <button class="btn btn-warning btn-sm" onclick="resetStudentExam('${s.student_id}','${s.exam_id}','${s.student_name}')" style="margin-top:4px;">↺ Reset</button>
+          ${s.pdf_url ? `<a href="${s.pdf_url}" target="_blank" class="btn btn-outline btn-sm" style="margin-top:4px;display:inline-flex;">📄 PDF</a>` : ''}
+        </td>
+      </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;padding:20px;color:#64748b;">Chưa có dữ liệu</td></tr>';
+  });
+}
+
+async function showResultDetail(submissionId) {
+  const res = await gas('apiGetStudentResult', submissionId);
+  if (!res.success) { toast(res.error, 'error'); return; }
+  const { submission: sub, answers } = res.data;
+
+  // Detect PDF exam: all answers have empty score and question_id like Q1, Q2...
+  const isPdfExam = answers.length > 0 && answers.every(a => a.score === '' || a.score === false || !a.graded);
+  const pdfExamDetected = answers.length > 0 && answers[0].question_id && String(answers[0].question_id).startsWith('Q');
+
+  // Get exam PDF url
+  const examRes = await gas('apiGetExam', sub.exam_id);
+  const pdfUrl = examRes.success ? examRes.data.pdf_url : '';
+
+  const photoUrl = sub.webcam_folder_url || '';
+  const infoHtml = `
+    <div style="margin-bottom:16px;padding:14px;background:#f8f5f5;border-radius:8px;font-size:13px;border:1px solid #fecaca;">
+      <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
+        ${photoUrl ? `
+          <div style="flex-shrink:0;text-align:center;">
+            <img src="${photoUrl}" style="width:80px;height:80px;object-fit:cover;border-radius:10px;border:2px solid #c8102e;">
+            <div style="font-size:10px;color:#64748b;margin-top:4px;">Ảnh thí sinh</div>
+          </div>` : ''}
+        <div style="flex:1;">
+          <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px;">
+            <span><b>Mã nộp:</b> ${sub.submission_id}</span>
+            <span><b>Vi phạm:</b> ${sub.violation_count}</span>
+            <span><b>Cờ:</b> ${sub.flagged ? '⚠️ Gian lận' : '✅ OK'}</span>
+            <span><b>Điểm:</b> ${sub.total_score !== '' && sub.total_score !== undefined ? sub.total_score + '/' + sub.max_score : 'Chưa chấm'}</span>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-outline btn-sm">📄 Xem đề PDF</a>
+                        <a href="${pdfUrl}" download class="btn btn-primary btn-sm" style="background:#c8102e;">⬇️ Tải PDF về</a>` : ''}
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  let bodyHtml = '';
+  if (pdfExamDetected) {
+    // PDF exam mode: show answers in a clean numbered list + total score input
+    bodyHtml = `
+      <div style="margin-bottom:16px;">
+        <div style="font-weight:600;margin-bottom:10px;">📝 Bài làm của học sinh</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;">
+          ${answers.map(a => `
+            <div style="border:1px solid #e2e8f0;border-radius:6px;padding:10px;background:#fff;">
+              <div style="font-size:11px;font-weight:700;color:#2563eb;margin-bottom:4px;">${a.question_id}</div>
+              <div style="font-size:13px;min-height:24px;word-break:break-word;">${a.student_answer || '<span style="color:#94a3b8;font-style:italic;">Bỏ trống</span>'}</div>
+            </div>`).join('')}
+        </div>
+      </div>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px;margin-top:16px;">
+        <div style="font-weight:600;color:#1e40af;margin-bottom:10px;">✏️ Chấm điểm</div>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+          <div>
+            <label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px;">Tổng điểm (/${answers.length} câu)</label>
+            <input type="number" id="grade-total" value="${sub.total_score || ''}" min="0" max="${answers.length}" step="0.5"
+              style="width:100px;padding:8px;border:1.5px solid #bfdbfe;border-radius:6px;font-size:15px;font-weight:700;">
+          </div>
+          <button class="btn btn-primary" onclick="gradeSubmission('${sub.submission_id}')">💾 Lưu điểm</button>
+        </div>
+      </div>`;
+  } else {
+    bodyHtml = `
+      <table>
+        <thead><tr><th>#</th><th>Câu</th><th>Trả lời</th><th>T/gian</th><th>Điểm</th><th>Chấm</th></tr></thead>
+        <tbody>
+          ${answers.map((a,i) => `
+            <tr>
+              <td>${i+1}</td>
+              <td style="max-width:180px;word-break:break-word;font-size:12px;">${a.question_id}</td>
+              <td>${a.student_answer||'—'}</td>
+              <td>${a.time_spent_sec}s</td>
+              <td>${a.score !== '' && a.score !== false ? a.score : '—'}</td>
+              <td>${a.graded ? '✅' : `<input type="number" style="width:50px" onchange="gradeAnswer('${sub.submission_id}','${a.question_id}',this.value)" min="0" max="10">`}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+  }
+
+  document.getElementById('result-detail-content').innerHTML = infoHtml + bodyHtml;
+  openModal('result-modal');
+}
+
+async function gradeSubmission(submissionId) {
+  const score = parseFloat(document.getElementById('grade-total').value);
+  if (isNaN(score)) { toast('Vui lòng nhập điểm hợp lệ', 'error'); return; }
+  const res = await gas('apiGradeSubmission', submissionId, score);
+  if (res.success) toast('Đã lưu điểm!', 'success');
+  else toast(res.error, 'error');
+}
+
+async function gradeAnswer(submissionId, questionId, score) {
+  const res = await gas('apiGradeAnswer', submissionId, questionId, parseFloat(score));
+  if (res.success) toast('Đã chấm điểm!', 'success');
+  else toast(res.error, 'error');
+}
+
+// ======================== Violations ========================
+let violationsRefreshTimer = null;
+
+async function loadViolations() {
+  const examId = document.getElementById('vio-exam-id')?.value || '';
+  const res = await gas('apiGetViolations', examId || null);
+  const tbody = document.getElementById('violations-table');
+  const summary = document.getElementById('violations-summary');
+  if (!tbody) return;
+
+  if (!res.success) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#dc2626;">${res.error}</td></tr>`;
+    return;
+  }
+
+  const rows = res.data || [];
+  const highCount = rows.filter(r => r.severity === 'high').length;
+  const medCount  = rows.filter(r => r.severity === 'medium').length;
+
+  summary.innerHTML = `
+    <div class="vio-stat vio-stat-total">📋 Tổng: ${rows.length}</div>
+    <div class="vio-stat vio-stat-high">🔴 Nghiêm trọng: ${highCount}</div>
+    <div class="vio-stat vio-stat-med">🟡 Trung bình: ${medCount}</div>`;
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#64748b;padding:32px;">Chưa có vi phạm nào</td></tr>';
+    return;
+  }
+
+  const typeLabels = {
+    phone_detected:  '📱 Điện thoại',
+    multiple_faces:  '👥 Nhiều người',
+    face_not_detected: '👁️ Không thấy mặt',
+    looking_away:    '👀 Nhìn đi chỗ khác',
+    tab_switch:      '🔀 Chuyển tab',
+    window_blur:     '🪟 Rời cửa sổ',
+    fullscreen_exit: '⛶ Thoát toàn màn hình',
+    behavior:        '⚠️ Hành vi'
+  };
+
+  tbody.innerHTML = rows.map(r => {
+    const cls = r.severity === 'high' ? 'violation-row-high' : 'violation-row-medium';
+    const badge = r.severity === 'high'
+      ? '<span class="badge-high">Nghiêm trọng</span>'
+      : '<span class="badge-medium">Trung bình</span>';
+    const ts = r.timestamp ? new Date(r.timestamp).toLocaleString('vi-VN') : '';
+    const typeLabel = typeLabels[r.type] || r.type;
+    return `<tr class="${cls}">
+      <td style="font-size:12px;white-space:nowrap;">${ts}</td>
+      <td>${r.student_id}</td>
+      <td style="font-size:12px;">${r.exam_id}</td>
+      <td>${typeLabel}</td>
+      <td style="font-size:12px;">${r.detail || ''}</td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join('');
+
+  // Reset auto-refresh countdown display
+  document.getElementById('vio-refresh-badge').textContent = 'Tự động làm mới mỗi 10s';
+}
+
+// Auto-refresh violations every 10s while on that panel
+function startViolationsAutoRefresh() {
+  stopViolationsAutoRefresh();
+  let countdown = 10;
+  violationsRefreshTimer = setInterval(() => {
+    countdown--;
+    const badge = document.getElementById('vio-refresh-badge');
+    if (badge) badge.textContent = `Làm mới sau ${countdown}s...`;
+    if (countdown <= 0) {
+      countdown = 10;
+      loadViolations();
+    }
+  }, 1000);
+}
+
+function stopViolationsAutoRefresh() {
+  if (violationsRefreshTimer) { clearInterval(violationsRefreshTimer); violationsRefreshTimer = null; }
+}
+
+async function testLogViolation() {
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = '⏳ Đang test...';
+  // Use the currently selected exam_id so test violation shows up in current filter
+  const selectedExam = document.getElementById('vio-exam-id')?.value || 'TEST_EXAM';
+  try {
+    const res = await gas('apiLogViolation', 'TEST_ADMIN', selectedExam, 'test_manual', 'Kiểm tra từ admin panel', 'medium');
+    if (res.success) {
+      toast('✅ GAS hoạt động! Vi phạm test đã ghi vào Sheet.', 'success');
+      // Switch to "all exams" view so the test entry is always visible
+      document.getElementById('vio-exam-id').value = '';
+      loadViolations();
+    } else {
+      toast('❌ GAS lỗi: ' + res.error, 'error');
+    }
+  } catch(e) {
+    toast('❌ Lỗi kết nối: ' + e.message, 'error');
+  }
+  btn.disabled = false; btn.textContent = '🧪 Test GAS';
+}
+
+// ======================== Reset Student Exam ========================
+async function resetStudentExam(studentId, examId, studentName) {
+  if (!confirm(`Reset bài thi của "${studentName}"?\nThí sinh sẽ được làm lại từ đầu. Bài nộp cũ sẽ bị xóa.`)) return;
+  const res = await gas('apiResetStudentExam', studentId, examId);
+  if (res.success) {
+    toast(`Đã reset bài thi của ${studentName}!`, 'success');
+    loadResults(document.getElementById('result-exam-select').value || '');
+  } else {
+    toast('Lỗi: ' + res.error, 'error');
+  }
+}
+
+// ======================== Config ========================
+async function loadConfig() {
+  const res = await gas('apiGetAdminConfig');
+  if (!res.success) return;
+  const status = document.getElementById('config-status');
+  const issues = [];
+  if (!res.data.claudeConfigured) issues.push('⚠️ Chưa cấu hình Claude API Key');
+  if (!res.data.driveConfigured)  issues.push('⚠️ Chưa cấu hình Google Drive Folder ID');
+  if (issues.length) {
+    status.innerHTML = issues.join('<br>');
+    status.style.display = 'block';
+  }
+  if (res.data.adminEmail)    document.getElementById('cfg-admin-email').value = res.data.adminEmail;
+  if (res.data.driveFolderId) document.getElementById('cfg-folder-id').value   = res.data.driveFolderId;
+  if (res.data.claudeApiKeyHint) document.getElementById('cfg-claude-key').placeholder = res.data.claudeApiKeyHint;
+}
+
+async function saveConfig() {
+  const res = await gas('apiSaveAdminConfig',
+    document.getElementById('cfg-claude-key').value,
+    document.getElementById('cfg-folder-id').value,
+    document.getElementById('cfg-admin-email').value
+  );
+  if (res.success) toast('Đã lưu cấu hình!', 'success');
+  else toast(res.error, 'error');
+}
+
+// ======================== Init ========================
+// ======================== Admin Login Overlay ========================
+async function doAdminOverlayLogin() {
+  const pw  = document.getElementById('overlay-pw').value;
+  const err = document.getElementById('admin-login-err');
+  const btn = document.getElementById('overlay-btn');
+  if (!pw) { err.textContent = 'Vui lòng nhập mật khẩu.'; err.style.display = 'block'; return; }
+  btn.textContent = '⏳ Đang xác thực...'; btn.disabled = true;
+  err.style.display = 'none';
+  const res = await gas('apiAdminLogin', pw);
+  btn.textContent = 'Đăng nhập'; btn.disabled = false;
+  if (res && res.success) {
+    sessionStorage.setItem('ace_admin_auth', '1');
+    document.getElementById('admin-login-overlay').style.display = 'none';
+  } else {
+    err.textContent = (res && res.error) || 'Mật khẩu không đúng.';
+    err.style.display = 'block';
+    document.getElementById('overlay-pw').value = '';
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  // Check if already authenticated this session
+  if (sessionStorage.getItem('ace_admin_auth') === '1') {
+    document.getElementById('admin-login-overlay').style.display = 'none';
+  }
+  loadDashboard();
+  loadConfig();
+});
+</script>
+</body>
+</html>
+
