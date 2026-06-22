@@ -996,8 +996,8 @@ async function showResultDetail(submissionId) {
             <span><b>Điểm:</b> ${sub.total_score !== '' && sub.total_score !== undefined ? sub.total_score + '/' + sub.max_score : 'Chưa chấm'}</span>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-outline btn-sm">📄 Xem đề PDF</a>
-                        <a href="${pdfUrl}" download class="btn btn-primary btn-sm" style="background:#c8102e;">⬇️ Tải PDF về</a>` : ''}
+            ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" class="btn btn-outline btn-sm">📄 Xem đề PDF</a>` : ''}
+            <button class="btn btn-sm" style="background:#c8102e;color:#fff;" onclick="downloadAnswersPDF('${sub.submission_id}')">⬇️ Tải đáp án PDF</button>
           </div>
         </div>
       </div>
@@ -1202,6 +1202,100 @@ async function saveConfig() {
   );
   if (res.success) toast('Đã lưu cấu hình!', 'success');
   else toast(res.error, 'error');
+}
+
+// ======================== Download Answers PDF ========================
+async function downloadAnswersPDF(submissionId) {
+  const res = await gas('apiGetStudentResult', submissionId);
+  if (!res.success) { toast('Lỗi tải dữ liệu', 'error'); return; }
+  const { submission: sub, answers } = res.data;
+
+  const examRes = await gas('apiGetExam', sub.exam_id);
+  const examTitle = examRes.success ? examRes.data.title : sub.exam_id;
+
+  const studentRes = await gas('apiGetStudents');
+  let studentName = sub.student_id, studentClass = '', studentId = sub.student_id;
+  if (studentRes.success) {
+    const st = studentRes.data.find(s => s.student_id === sub.student_id);
+    if (st) { studentName = st.name; studentClass = st.class || st.branch || ''; }
+  }
+
+  const photoUrl = sub.webcam_folder_url || '';
+  const score = (sub.total_score !== '' && sub.total_score !== undefined)
+    ? `${sub.total_score}/${sub.max_score}`
+    : 'Chưa chấm';
+  const submittedAt = sub.submitted_at ? new Date(sub.submitted_at).toLocaleString('vi-VN') : '';
+  const flagged = sub.flagged ? '⚠️ Bị đánh dấu gian lận' : '✅ Bình thường';
+
+  const answersHtml = answers.map((a, i) => `
+    <tr>
+      <td style="padding:6px 10px;border:1px solid #e2e8f0;text-align:center;font-weight:700;color:#c8102e;">${i+1}</td>
+      <td style="padding:6px 10px;border:1px solid #e2e8f0;font-size:12px;">${a.question_id}</td>
+      <td style="padding:6px 10px;border:1px solid #e2e8f0;font-weight:600;">${a.student_answer || '<i style="color:#94a3b8">Bỏ trống</i>'}</td>
+      <td style="padding:6px 10px;border:1px solid #e2e8f0;text-align:center;">${a.score !== '' && a.score !== false && a.score !== undefined ? a.score : '—'}</td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8">
+  <title>Đáp án — ${studentName}</title>
+  <style>
+    body{font-family:'Segoe UI',sans-serif;margin:0;padding:24px;color:#1e293b;font-size:13px;}
+    .header{display:flex;align-items:center;gap:16px;border-bottom:3px solid #c8102e;padding-bottom:14px;margin-bottom:18px;}
+    .logo{width:54px;height:54px;object-fit:contain;}
+    .org{font-size:11px;color:#64748b;margin-top:2px;}
+    .title{font-size:19px;font-weight:800;color:#c8102e;}
+    .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px;}
+    .info-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:10px 14px;}
+    .info-label{font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;}
+    .info-val{font-size:14px;font-weight:700;margin-top:2px;}
+    .photo{width:80px;height:80px;object-fit:cover;border-radius:8px;border:2px solid #c8102e;}
+    table{width:100%;border-collapse:collapse;margin-top:10px;}
+    thead{background:#c8102e;color:#fff;}
+    thead th{padding:8px 10px;text-align:left;font-size:12px;}
+    tr:nth-child(even){background:#f8fafc;}
+    .footer{margin-top:24px;border-top:1px solid #e2e8f0;padding-top:12px;font-size:11px;color:#94a3b8;text-align:center;}
+    @media print{body{padding:0;} button{display:none;}}
+  </style></head><body>
+  <div class="header">
+    <img class="logo" src="https://lh3.googleusercontent.com/d/1jtxhRrUxip69b4VqgqAR9joCsZ2dDx79" onerror="this.style.display='none'">
+    <div>
+      <div class="title">ACE Testing System</div>
+      <div class="org">Anh ngữ Á Châu — Phiếu đáp án thí sinh</div>
+    </div>
+    ${photoUrl ? `<img class="photo" src="${photoUrl}" style="margin-left:auto;">` : ''}
+  </div>
+
+  <div class="info-grid">
+    <div class="info-box"><div class="info-label">Họ tên thí sinh</div><div class="info-val">${studentName}</div></div>
+    <div class="info-box"><div class="info-label">Mã thí sinh</div><div class="info-val">${studentId}</div></div>
+    <div class="info-box"><div class="info-label">Chi nhánh</div><div class="info-val">${studentClass || '—'}</div></div>
+    <div class="info-box"><div class="info-label">Bài thi</div><div class="info-val">${examTitle}</div></div>
+    <div class="info-box"><div class="info-label">Điểm số</div><div class="info-val" style="color:#c8102e;">${score}</div></div>
+    <div class="info-box"><div class="info-label">Thời gian nộp</div><div class="info-val">${submittedAt}</div></div>
+    <div class="info-box"><div class="info-label">Vi phạm</div><div class="info-val">${sub.violation_count} lần</div></div>
+    <div class="info-box"><div class="info-label">Trạng thái</div><div class="info-val">${flagged}</div></div>
+  </div>
+
+  <table>
+    <thead><tr>
+      <th style="width:40px;">#</th>
+      <th>Câu hỏi</th>
+      <th>Đáp án của thí sinh</th>
+      <th style="width:60px;">Điểm</th>
+    </tr></thead>
+    <tbody>${answersHtml}</tbody>
+  </table>
+
+  <div class="footer">
+    Mã nộp: ${submissionId} &nbsp;|&nbsp; In từ ACE Testing System &nbsp;|&nbsp; ${new Date().toLocaleString('vi-VN')}
+  </div>
+  <div style="text-align:center;margin-top:16px;">
+    <button onclick="window.print()" style="padding:10px 28px;background:#c8102e;color:#fff;border:none;border-radius:7px;font-size:14px;font-weight:700;cursor:pointer;">🖨️ In / Lưu PDF</button>
+  </div>
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
 }
 
 // ======================== Init ========================

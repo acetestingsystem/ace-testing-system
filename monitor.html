@@ -3,41 +3,103 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-<title>Camera Giám Sát 2</title>
+<title>ACE Testing System — Camera 2</title>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.min.js"></script>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:#0f172a; color:#fff; font-family:'Segoe UI',sans-serif; min-height:100vh;
-         display:flex; flex-direction:column; align-items:center; padding:16px; gap:12px; }
-  h2 { font-size:15px; color:#94a3b8; letter-spacing:.5px; margin-top:4px; }
-  #cam2 { width:100%; max-width:420px; border-radius:12px; border:2px solid #334155;
-           background:#000; aspect-ratio:4/3; object-fit:cover; }
-  #status-card {
-    width:100%; max-width:420px; background:#1e293b; border-radius:12px;
-    padding:14px 16px; display:flex; align-items:center; gap:12px;
+  body {
+    background: linear-gradient(160deg,#7f1d1d 0%,#991b1b 40%,#c8102e 100%);
+    color:#fff; font-family:'Segoe UI',sans-serif; min-height:100vh;
+    display:flex; flex-direction:column; align-items:center; padding:16px; gap:12px;
   }
-  #status-dot { width:14px; height:14px; border-radius:50%; flex-shrink:0; background:#64748b; }
+
+  /* Header */
+  .ace-header {
+    text-align:center; padding:12px 0 4px;
+  }
+  .ace-logo {
+    width:56px; height:56px; object-fit:contain;
+    filter:drop-shadow(0 2px 8px rgba(0,0,0,.4));
+    margin-bottom:6px;
+  }
+  .ace-title {
+    font-size:15px; font-weight:800; letter-spacing:.5px;
+    color:#fff; text-shadow:0 2px 6px rgba(0,0,0,.4);
+  }
+  .ace-title span { color:#fcd34d; }
+  .ace-sub {
+    font-size:11px; color:rgba(255,255,255,.7); margin-top:2px;
+  }
+
+  /* Camera */
+  #cam2 {
+    width:100%; max-width:420px; border-radius:12px;
+    border:2px solid rgba(255,255,255,.2);
+    background:#000; aspect-ratio:4/3; object-fit:cover;
+    box-shadow:0 8px 32px rgba(0,0,0,.4);
+  }
+
+  /* Status card */
+  #status-card {
+    width:100%; max-width:420px;
+    background:rgba(0,0,0,.3); backdrop-filter:blur(6px);
+    border:1px solid rgba(255,255,255,.15);
+    border-radius:12px; padding:14px 16px;
+    display:flex; align-items:center; gap:12px;
+  }
+  #status-dot { width:14px; height:14px; border-radius:50%; flex-shrink:0; background:rgba(255,255,255,.3); }
   #status-dot.ok   { background:#22c55e; box-shadow:0 0 8px #22c55e; animation:pulse 1.5s infinite; }
   #status-dot.warn { background:#f59e0b; box-shadow:0 0 8px #f59e0b; }
   #status-dot.err  { background:#ef4444; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
   #status-text { font-size:14px; line-height:1.4; }
-  #status-text small { display:block; color:#64748b; font-size:11px; margin-top:2px; }
+  #status-text small { display:block; color:rgba(255,255,255,.55); font-size:11px; margin-top:2px; }
+
+  /* Face count */
   #face-count {
-    width:100%; max-width:420px; background:#1e293b; border-radius:12px;
-    padding:12px 16px; font-size:13px; color:#94a3b8; display:none;
+    width:100%; max-width:420px;
+    background:rgba(0,0,0,.25); border-radius:12px;
+    padding:10px 16px; font-size:13px; color:rgba(255,255,255,.7); display:none;
   }
-  #face-count span { color:#fff; font-weight:600; }
+  #face-count span { color:#fff; font-weight:700; }
+
+  /* Warning banner */
   .warn-banner {
-    width:100%; max-width:420px; background:#7f1d1d; border-radius:12px;
-    padding:12px 16px; font-size:14px; color:#fca5a5; display:none; text-align:center;
+    width:100%; max-width:420px;
+    background:rgba(127,29,29,.8); border:1px solid #fca5a5;
+    border-radius:12px; padding:12px 16px;
+    font-size:14px; color:#fca5a5; display:none; text-align:center;
+    animation:warnpulse 1s ease-in-out infinite;
   }
-  #guide { max-width:420px; color:#475569; font-size:12px; text-align:center; line-height:1.6; }
+  @keyframes warnpulse { 0%,100%{opacity:1} 50%{opacity:.7} }
+
+  /* Guide */
+  #guide {
+    max-width:420px; color:rgba(255,255,255,.5);
+    font-size:12px; text-align:center; line-height:1.7;
+    background:rgba(0,0,0,.2); border-radius:10px; padding:10px 16px;
+  }
+
+  /* Divider */
+  .divider {
+    width:60px; height:2px; margin:0 auto;
+    background:linear-gradient(90deg,transparent,#fcd34d,transparent);
+    border-radius:2px;
+  }
 </style>
 </head>
 <body>
-<h2>📹 CAMERA GIÁM SÁT 2</h2>
+
+<div class="ace-header">
+  <img class="ace-logo"
+    src="https://lh3.googleusercontent.com/d/1jtxhRrUxip69b4VqgqAR9joCsZ2dDx79"
+    onerror="this.style.display='none'"
+    alt="ACE">
+  <div class="ace-title">ACE <span>Testing System</span></div>
+  <div class="ace-sub">Anh ngữ Á Châu — Camera Giám Sát 2</div>
+  <div class="divider" style="margin-top:8px;"></div>
+</div>
 
 <video id="cam2" autoplay playsinline muted></video>
 
@@ -55,7 +117,11 @@
   ⚠️ Phát hiện người lạ trong phòng thi!
 </div>
 
-<p id="guide">Đặt điện thoại trên giá/ghế hướng về phía bàn học.<br>Không tắt màn hình trong suốt buổi thi.</p>
+<p id="guide">
+  📱 Đặt điện thoại trên giá/ghế, hướng về phía bàn học.<br>
+  🔒 Không tắt màn hình trong suốt buổi thi.<br>
+  ⚡ Kết nối Wi-Fi ổn định để không bị ngắt kết nối.
+</p>
 
 <script>
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbxeWng8djn2nsp26i4CinFZGlsQlGOFiUF4UAKO56uDWlAfbYlOTcjbvyHXiEPTda8K/exec';
@@ -63,7 +129,7 @@ const p   = new URLSearchParams(location.search);
 const SID = p.get('sid') || '';
 const EID = p.get('eid') || '';
 
-document.getElementById('student-info').textContent = SID ? `Học sinh: ${SID}` : '';
+document.getElementById('student-info').textContent = SID ? `Thí sinh: ${SID}` : '';
 
 const dot        = document.getElementById('status-dot');
 const statusText = document.getElementById('status-text').childNodes[0];
@@ -85,8 +151,24 @@ function beacon(type, detail, severity='medium') {
   navigator.sendBeacon(GAS_URL, blob);
 }
 
-// Heartbeat every 15s so admin knows phone is still connected
-setInterval(() => beacon('cam2_online', 'Camera 2 đang hoạt động', 'low'), 15000);
+// Heartbeat every 12s so exam page knows phone is connected
+const heartbeatTimer = setInterval(() => beacon('cam2_online', 'Camera 2 đang hoạt động', 'low'), 12000);
+
+// Send offline beacon immediately when app goes to background / tab hidden
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    beacon('cam2_offline', 'Camera 2 thoát khỏi tab/app', 'high');
+  } else {
+    // Came back — send online immediately so exam page reconnects fast
+    beacon('cam2_online', 'Camera 2 quay lại', 'low');
+  }
+});
+
+// Send offline on page close
+window.addEventListener('pagehide', () => {
+  clearInterval(heartbeatTimer);
+  beacon('cam2_offline', 'Camera 2 đóng trang', 'high');
+});
 
 const _last = {};
 function debounce(type, detail, severity, ms=30000) {
@@ -100,7 +182,7 @@ let model = null;
 
 async function init() {
   if (!SID || !EID) {
-    setStatus('❌ Thiếu thông tin học sinh', 'err');
+    setStatus('❌ Thiếu thông tin thí sinh', 'err');
     return;
   }
 
@@ -116,7 +198,7 @@ async function init() {
     return;
   }
 
-  setStatus('Đang tải mô hình AI...', '');
+  setStatus('Đang tải mô hình AI...');
   try {
     model = await blazeface.load();
     setStatus('✅ Đang giám sát', 'ok');
@@ -137,7 +219,6 @@ async function detect() {
     fcNum.textContent = n;
 
     if (n >= 1) {
-      // Camera 2 faces = extra people (student should NOT be in this view)
       setStatus(`⚠️ Phát hiện ${n} người!`, 'warn');
       warnBanner.style.display = 'block';
       debounce('cam2_person', `Camera 2: phát hiện ${n} người trong phòng thi`, 'high');

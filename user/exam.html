@@ -348,6 +348,8 @@ let violationCount = 0;
 let webcamStream  = null;
 let submitted     = false;
 let questionFocusStart = {};   // questionId -> Date
+let identityPhotoUrl = '';
+let _monitorUrl = '';
 
 // ════════════════════════════════════════════════
 // Boot
@@ -387,11 +389,23 @@ async function loadExam() {
     else renderQuestions();
     loadPdf();
 
+    // Upload identity photo to Drive (fire-and-forget, store URL for submission)
+    saveIdentityPhotoAsync(examId, studentData.student_id);
+
     // Switch to Camera 2 mandatory setup phase
     document.getElementById('phase-loading').style.display = 'none';
     document.getElementById('phase-cam2').style.display    = 'block';
     initCam2QR();
   } catch(e) { alert('Lỗi tải đề thi: ' + e.message); }
+}
+
+async function saveIdentityPhotoAsync(eid, sid) {
+  try {
+    const b64 = sessionStorage.getItem('lms_identity_photo');
+    if (!b64) return;
+    const res = await gas('saveIdentityPhoto', sid, eid, b64);
+    if (res && res.success && res.data) identityPhotoUrl = res.data;
+  } catch(e) {}
 }
 
 function loadPdf() {
@@ -621,7 +635,7 @@ function buildSubmitPayload() {
     studentId: studentData.student_id,
     examId,
     violationCount,
-    webcamFolderUrl: '',
+    webcamFolderUrl: identityPhotoUrl || '',
     answers: answerList
   };
 }
@@ -946,9 +960,10 @@ let _cam2Connected = false;
 
 function initCam2QR() {
   if (!studentData || !examId) return;
-  const monitorUrl = 'https://vankhoivn13.github.io/lms-system/monitor.html'
+  const monitorUrl = 'https://acetestingsystem.github.io/ace-testing-system/monitor.html'
     + '?sid=' + encodeURIComponent(studentData.student_id)
     + '&eid=' + encodeURIComponent(examId);
+  _monitorUrl = monitorUrl;
 
   // Render QR using image API (no JS library needed)
   const qrApiUrl = 'https://api.qrserver.com/v1/create-qr-code/?data='
@@ -1000,6 +1015,9 @@ function _onCam2Status(connected, pollTimer) {
 
   if (connected && !_cam2Connected) {
     _cam2Connected = true;
+    // Restore panel style (handles both first connect and reconnect)
+    const panel = document.getElementById('cam2-panel');
+    if (panel) { panel.style.border = '2px solid #334155'; panel.style.background = '#1e293b'; }
     // Phase-cam2: unlock start button
     if (statusEl) {
       statusEl.innerHTML = '✅ <strong>Camera 2 đã kết nối!</strong><br><span style="font-size:12px;color:#16a34a">Bạn có thể bắt đầu thi.</span>';
@@ -1015,11 +1033,31 @@ function _onCam2Status(connected, pollTimer) {
   }
 
   if (!connected && _cam2Connected) {
-    // Phone disconnected DURING exam → violation
+    // Phone disconnected DURING exam → violation + show QR again
     _cam2Connected = false;
-    if (cornerEl) { cornerEl.textContent = '⚠️ Cam2 mất'; cornerEl.className = 'warning'; }
     recordViolation('Camera 2 mất kết nối', 'cam2_disconnected', 'high');
+
+    // Show QR again in corner panel so student can reconnect
+    const panel = document.getElementById('cam2-panel');
+    if (panel) {
+      panel.style.border = '2px solid #ef4444';
+      panel.style.background = '#1a0505';
+    }
+    if (cornerEl) {
+      cornerEl.innerHTML = '⚠️ Mất kết nối<br><span style="font-size:8px;color:#fca5a5;">Quét QR để kết nối lại</span>';
+      cornerEl.className = 'warning';
+    }
+    // Re-render QR if needed
+    const existingQrImg = document.querySelector('#cam2-panel img');
+    if (!existingQrImg && _monitorUrl) {
+      const img2 = document.createElement('img');
+      img2.src = 'https://api.qrserver.com/v1/create-qr-code/?data=' + encodeURIComponent(_monitorUrl) + '&size=120x120&margin=6';
+      img2.style.cssText = 'width:120px;height:120px';
+      const qrEl = document.getElementById('cam2-qr');
+      if (qrEl) qrEl.replaceWith(img2);
+    }
   }
+
 }
 
 const _lastWarningTime = {};
