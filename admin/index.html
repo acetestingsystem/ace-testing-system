@@ -173,6 +173,21 @@
 </head>
 <body>
 
+<!-- Photo verification popup -->
+<div id="photo-popup" onclick="closePhotoPopup()" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:9000;align-items:center;justify-content:center;flex-direction:column;gap:16px;">
+  <div onclick="event.stopPropagation()" style="background:#fff;border-radius:16px;padding:24px;max-width:400px;width:90%;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,.5);">
+    <div style="font-size:13px;font-weight:700;color:#c8102e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Xác minh danh tính thí sinh</div>
+    <div id="photo-popup-name" style="font-size:18px;font-weight:800;color:#1e293b;margin-bottom:2px;"></div>
+    <div id="photo-popup-id" style="font-size:12px;color:#64748b;margin-bottom:16px;"></div>
+    <img id="photo-popup-img" src="" alt="Ảnh thí sinh"
+      style="width:100%;max-width:320px;height:320px;object-fit:cover;border-radius:12px;border:3px solid #c8102e;display:block;margin:0 auto;">
+    <div style="margin-top:16px;display:flex;gap:10px;justify-content:center;">
+      <button onclick="closePhotoPopup()" style="padding:9px 24px;background:#f1f5f9;color:#1e293b;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">Đóng</button>
+      <button onclick="window.open(document.getElementById('photo-popup-img').src,'_blank')" style="padding:9px 24px;background:#c8102e;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">🔍 Xem ảnh gốc</button>
+    </div>
+  </div>
+</div>
+
 <!-- Admin login overlay -->
 <div id="admin-login-overlay">
   <div id="admin-login-box">
@@ -950,9 +965,9 @@ function loadResults(examId) {
         <td style="text-align:center;width:60px;">
           ${s.webcam_folder_url
             ? `<img src="${s.webcam_folder_url}"
-                onclick="window.open('${s.webcam_folder_url}','_blank')"
-                title="Nhấn để xem ảnh đầy đủ"
-                style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:2px solid #e2e8f0;cursor:pointer;transition:.2s;"
+                onclick="showPhotoPopup('${s.webcam_folder_url}','${s.student_name}','${s.student_id || ''}')"
+                title="Nhấn để xác minh danh tính"
+                style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:2px solid #e2e8f0;cursor:zoom-in;transition:.2s;"
                 onmouseover="this.style.border='2px solid #c8102e';this.style.transform='scale(1.1)'"
                 onmouseout="this.style.border='2px solid #e2e8f0';this.style.transform='scale(1)'">`
             : '<div style="width:44px;height:44px;background:#f1f5f9;border-radius:8px;border:2px dashed #cbd5e1;display:inline-flex;align-items:center;justify-content:center;font-size:18px;">👤</div>'}
@@ -1209,6 +1224,20 @@ async function saveConfig() {
   if (res.success) toast('Đã lưu cấu hình!', 'success');
   else toast(res.error, 'error');
 }
+
+// ======================== Photo Popup ========================
+function showPhotoPopup(url, name, id) {
+  document.getElementById('photo-popup-img').src = url;
+  document.getElementById('photo-popup-name').textContent = name || '—';
+  document.getElementById('photo-popup-id').textContent = id ? 'Mã: ' + id : '';
+  const popup = document.getElementById('photo-popup');
+  popup.style.display = 'flex';
+}
+function closePhotoPopup() {
+  document.getElementById('photo-popup').style.display = 'none';
+}
+// Close on Escape key
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePhotoPopup(); });
 
 // ======================== Download Answers PDF ========================
 async function downloadAnswersPDF(submissionId) {
