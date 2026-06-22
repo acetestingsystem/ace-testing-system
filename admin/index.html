@@ -1206,8 +1206,12 @@ async function saveConfig() {
 
 // ======================== Download Answers PDF ========================
 async function downloadAnswersPDF(submissionId) {
+  // Open window FIRST (user gesture context) to avoid popup blocker
+  const w = window.open('', '_blank');
+  w.document.write('<html><body style="font-family:sans-serif;padding:32px;color:#64748b;">⏳ Đang tải dữ liệu...</body></html>');
+
   const res = await gas('apiGetStudentResult', submissionId);
-  if (!res.success) { toast('Lỗi tải dữ liệu', 'error'); return; }
+  if (!res.success) { toast('Lỗi tải dữ liệu', 'error'); w.close(); return; }
   const { submission: sub, answers } = res.data;
 
   const examRes = await gas('apiGetExam', sub.exam_id);
@@ -1293,7 +1297,7 @@ async function downloadAnswersPDF(submissionId) {
   </div>
   </body></html>`;
 
-  const w = window.open('', '_blank');
+  w.document.open();
   w.document.write(html);
   w.document.close();
 }

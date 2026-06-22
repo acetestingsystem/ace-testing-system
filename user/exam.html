@@ -993,17 +993,24 @@ function initCam2QR() {
 
   document.getElementById('cam2-panel').style.display = 'block';
 
-  // Poll every 6s for cam2_connected / cam2_online heartbeat
+  // Poll every 6s — use latest cam2 event to determine state
   const cam2PollTimer = setInterval(async () => {
     try {
       const res = await gas('getViolations', examId);
       if (!res.success) return;
-      const fresh = res.data.some(v =>
+
+      // Get all cam2 events for this student, sorted newest first
+      const cam2Events = res.data.filter(v =>
         v.student_id === studentData.student_id &&
-        ['cam2_connected','cam2_online'].includes(v.type) &&
-        Date.now() - new Date(v.timestamp).getTime() < 45000
-      );
-      _onCam2Status(fresh, cam2PollTimer);
+        ['cam2_connected','cam2_online','cam2_offline'].includes(v.type)
+      ).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+      const latest = cam2Events[0];
+      const isConnected = latest &&
+        ['cam2_connected','cam2_online'].includes(latest.type) &&
+        Date.now() - new Date(latest.timestamp).getTime() < 30000;
+
+      _onCam2Status(isConnected, cam2PollTimer);
     } catch(e) {}
   }, 6000);
 }
