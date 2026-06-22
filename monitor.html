@@ -151,15 +151,18 @@ function beacon(type, detail, severity='medium') {
   navigator.sendBeacon(GAS_URL, blob);
 }
 
-// Heartbeat every 12s so exam page knows phone is connected
-const heartbeatTimer = setInterval(() => beacon('cam2_online', 'Camera 2 đang hoạt động', 'low'), 12000);
+// Heartbeat — only runs when page is VISIBLE (stops when user switches app/tab)
+let heartbeatActive = true;
+const heartbeatTimer = setInterval(() => {
+  if (heartbeatActive) beacon('cam2_online', 'Camera 2 đang hoạt động', 'low');
+}, 12000);
 
-// Send offline beacon immediately when app goes to background / tab hidden
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
+    heartbeatActive = false;  // stop heartbeat so no false "online" while backgrounded
     beacon('cam2_offline', 'Camera 2 thoát khỏi tab/app', 'high');
   } else {
-    // Came back — send online immediately so exam page reconnects fast
+    heartbeatActive = true;
     beacon('cam2_online', 'Camera 2 quay lại', 'low');
   }
 });
