@@ -336,7 +336,7 @@
       </div>
       <div class="card" style="padding:0;">
         <table>
-          <thead><tr><th>Thí sinh</th><th>Chi nhánh</th><th>Bài thi</th><th>Điểm</th><th>Vi phạm</th><th>Cờ</th><th>Nộp lúc</th><th>Hành động</th></tr></thead>
+          <thead><tr><th style="width:60px;">Ảnh</th><th>Thí sinh</th><th>Chi nhánh</th><th>Bài thi</th><th>Điểm</th><th>Vi phạm</th><th>Cờ</th><th>Nộp lúc</th><th>Hành động</th></tr></thead>
           <tbody id="results-table"></tbody>
         </table>
       </div>
@@ -947,10 +947,17 @@ function loadResults(examId) {
     const tbody = document.getElementById('results-table');
     tbody.innerHTML = (data||[]).map(s => `
       <tr>
-        <td>
-          ${s.webcam_folder_url ? `<img src="${s.webcam_folder_url}" style="width:32px;height:32px;object-fit:cover;border-radius:50%;margin-right:6px;vertical-align:middle;border:2px solid #e2e8f0">` : ''}
-          ${s.student_name}
+        <td style="text-align:center;width:60px;">
+          ${s.webcam_folder_url
+            ? `<img src="${s.webcam_folder_url}"
+                onclick="window.open('${s.webcam_folder_url}','_blank')"
+                title="Nhấn để xem ảnh đầy đủ"
+                style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:2px solid #e2e8f0;cursor:pointer;transition:.2s;"
+                onmouseover="this.style.border='2px solid #c8102e';this.style.transform='scale(1.1)'"
+                onmouseout="this.style.border='2px solid #e2e8f0';this.style.transform='scale(1)'">`
+            : '<div style="width:44px;height:44px;background:#f1f5f9;border-radius:8px;border:2px dashed #cbd5e1;display:inline-flex;align-items:center;justify-content:center;font-size:18px;">👤</div>'}
         </td>
+        <td>${s.student_name}</td>
         <td>${s.student_class || '—'}</td>
         <td>${s.exam_title || s.exam_id}</td>
         <td><b>${s.total_score !== '' && s.total_score !== undefined ? s.total_score + '/' + s.max_score : '—'}</b></td>
@@ -960,9 +967,8 @@ function loadResults(examId) {
         <td style="white-space:nowrap;">
           <button class="btn btn-outline btn-sm" onclick="showResultDetail('${s.submission_id}')">🔍 Xem</button>
           <button class="btn btn-warning btn-sm" onclick="resetStudentExam('${s.student_id}','${s.exam_id}','${s.student_name}')" style="margin-top:4px;">↺ Reset</button>
-          ${s.pdf_url ? `<a href="${s.pdf_url}" target="_blank" class="btn btn-outline btn-sm" style="margin-top:4px;display:inline-flex;">📄 PDF</a>` : ''}
         </td>
-      </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;padding:20px;color:#64748b;">Chưa có dữ liệu</td></tr>';
+      </tr>`).join('') || '<tr><td colspan="9" style="text-align:center;padding:20px;color:#64748b;">Chưa có dữ liệu</td></tr>';
   });
 }
 

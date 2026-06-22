@@ -265,6 +265,22 @@
 <!-- Violation flash -->
 <div id="violation-flash"></div>
 
+<!-- Cam2 Freeze Overlay — blocks exam when camera 2 disconnects -->
+<div id="cam2-freeze" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:800;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;padding:24px;">
+  <div style="font-size:56px;">📵</div>
+  <div style="font-size:22px;font-weight:800;color:#ef4444;">Camera 2 mất kết nối!</div>
+  <div style="font-size:14px;color:#cbd5e1;max-width:320px;line-height:1.7;">
+    Bài thi đang bị <b style="color:#fbbf24">tạm dừng</b>.<br>
+    Quét QR bên dưới để kết nối lại Camera 2.
+  </div>
+  <img id="freeze-qr-img" src="" style="width:200px;height:200px;border-radius:12px;border:3px solid #ef4444;">
+  <div style="background:#1e293b;border-radius:10px;padding:10px 24px;">
+    <div style="font-size:12px;color:#94a3b8;">Thời gian tạm dừng</div>
+    <div id="freeze-elapsed" style="font-size:28px;font-weight:800;color:#fbbf24;font-variant-numeric:tabular-nums;">0s</div>
+  </div>
+  <div style="font-size:12px;color:#64748b;">Thời gian bị tạm dừng sẽ không được hoàn lại.</div>
+</div>
+
 <!-- Warning modal -->
 <div class="modal-overlay" id="warning-modal">
   <div class="modal">
@@ -957,6 +973,8 @@ function _showVioSent() {
 // Camera 2 — mandatory QR phone monitoring
 // ════════════════════════════════════════════════
 let _cam2Connected = false;
+let _freezeInterval = null;
+let _freezeSec = 0;
 
 function initCam2QR() {
   if (!studentData || !examId) return;
@@ -1016,55 +1034,58 @@ function initCam2QR() {
 }
 
 function _onCam2Status(connected, pollTimer) {
-  const statusEl  = document.getElementById('cam2-connect-status');
-  const cornerEl  = document.getElementById('cam2-status');
-  const btn       = document.getElementById('btn-start-exam');
+  const statusEl = document.getElementById('cam2-connect-status');
+  const cornerEl = document.getElementById('cam2-status');
+  const btn      = document.getElementById('btn-start-exam');
 
   if (connected && !_cam2Connected) {
     _cam2Connected = true;
-    // Restore panel style (handles both first connect and reconnect)
     const panel = document.getElementById('cam2-panel');
     if (panel) { panel.style.border = '2px solid #334155'; panel.style.background = '#1e293b'; }
-    // Phase-cam2: unlock start button
+    if (cornerEl) { cornerEl.textContent = '✅ Cam2 OK'; cornerEl.className = 'connected'; }
     if (statusEl) {
       statusEl.innerHTML = '✅ <strong>Camera 2 đã kết nối!</strong><br><span style="font-size:12px;color:#16a34a">Bạn có thể bắt đầu thi.</span>';
       statusEl.style.color = '#16a34a';
     }
-    if (btn) {
-      btn.disabled = false;
-      btn.style.background = '#2563eb';
-      btn.style.cursor = 'pointer';
-    }
-    // Small corner panel
-    if (cornerEl) { cornerEl.textContent = '✅ Cam2 OK'; cornerEl.className = 'connected'; }
+    if (btn) { btn.disabled = false; btn.style.background = '#2563eb'; btn.style.cursor = 'pointer'; }
+    // If exam already running → unfreeze
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay && overlay.style.display === 'none') _unfreezeExam();
   }
 
   if (!connected && _cam2Connected) {
-    // Phone disconnected DURING exam → violation + show QR again
     _cam2Connected = false;
-    recordViolation('Camera 2 mất kết nối', 'cam2_disconnected', 'high');
-
-    // Show QR again in corner panel so student can reconnect
-    const panel = document.getElementById('cam2-panel');
-    if (panel) {
-      panel.style.border = '2px solid #ef4444';
-      panel.style.background = '#1a0505';
-    }
-    if (cornerEl) {
-      cornerEl.innerHTML = '⚠️ Mất kết nối<br><span style="font-size:8px;color:#fca5a5;">Quét QR để kết nối lại</span>';
-      cornerEl.className = 'warning';
-    }
-    // Re-render QR if needed
-    const existingQrImg = document.querySelector('#cam2-panel img');
-    if (!existingQrImg && _monitorUrl) {
-      const img2 = document.createElement('img');
-      img2.src = 'https://api.qrserver.com/v1/create-qr-code/?data=' + encodeURIComponent(_monitorUrl) + '&size=120x120&margin=6';
-      img2.style.cssText = 'width:120px;height:120px';
-      const qrEl = document.getElementById('cam2-qr');
-      if (qrEl) qrEl.replaceWith(img2);
-    }
+    if (cornerEl) { cornerEl.innerHTML = '⚠️ Mất kết nối<br><span style="font-size:8px;color:#fca5a5;">Quét QR lại</span>'; cornerEl.className = 'warning'; }
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay && overlay.style.display === 'none') _freezeExam();
   }
+}
 
+function _freezeExam() {
+  if (_freezeInterval) return;
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  logViolation('cam2_disconnected', 'Camera 2 mất kết nối — bài thi bị tạm dừng', 'high');
+  violationCount++;
+  document.getElementById('violation-count').textContent = violationCount;
+  if (_monitorUrl) {
+    document.getElementById('freeze-qr-img').src =
+      'https://api.qrserver.com/v1/create-qr-code/?data=' + encodeURIComponent(_monitorUrl) + '&size=200x200&margin=10';
+  }
+  document.getElementById('cam2-freeze').style.display = 'flex';
+  _freezeSec = 0;
+  _freezeInterval = setInterval(() => {
+    _freezeSec++;
+    document.getElementById('freeze-elapsed').textContent = _freezeSec + 's';
+  }, 1000);
+}
+
+function _unfreezeExam() {
+  const freeze = document.getElementById('cam2-freeze');
+  if (!freeze || freeze.style.display === 'none') return;
+  freeze.style.display = 'none';
+  if (_freezeInterval) { clearInterval(_freezeInterval); _freezeInterval = null; }
+  if (!submitted && !timerInterval) startTimer();
+  logViolation('cam2_reconnected', 'Camera 2 kết nối lại sau ' + _freezeSec + 's tạm dừng', 'low');
 }
 
 const _lastWarningTime = {};
