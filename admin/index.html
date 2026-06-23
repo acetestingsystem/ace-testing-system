@@ -1354,7 +1354,7 @@ async function downloadAnswersPDF(submissionId) {
         <div style="font-size:14px;margin-bottom:4px;">
           <b>Câu ${i+1}:</b>${qText ? ' ' + qText : ''}
         </div>
-        <div style="font-size:14px;padding-left:16px;">${answerText}</div>
+        <div style="font-size:14px;padding-left:16px;word-break:break-word;white-space:pre-wrap;">${answerText}</div>
       </div>`;
   }).join('');
 
