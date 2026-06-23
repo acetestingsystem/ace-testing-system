@@ -501,7 +501,8 @@
 
 <!-- MODAL: Result Detail -->
 <div class="modal-overlay" id="result-modal">
-  <div class="modal" style="width:700px;">
+  <div class="modal" style="width:700px;position:relative;">
+    <button onclick="closeModal('result-modal')" style="position:absolute;top:12px;right:14px;background:none;border:none;font-size:22px;color:#94a3b8;cursor:pointer;line-height:1;" title="Đóng">×</button>
     <h2>Chi tiết bài làm</h2>
     <div id="result-detail-content"></div>
     <div class="modal-footer">
