@@ -1364,10 +1364,14 @@ async function downloadAnswersPDF(submissionId) {
   <style>
     *{box-sizing:border-box;margin:0;padding:0;}
     body{font-family:'Times New Roman',serif;padding:40px 48px;color:#000;font-size:14px;line-height:1.7;}
-    .ace-header{display:flex;align-items:center;gap:14px;margin-bottom:6px;}
+    .ace-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+    .ace-left{display:flex;align-items:center;gap:14px;}
     .ace-logo{width:44px;height:44px;object-fit:contain;}
-    .ace-name{font-size:13px;font-weight:700;color:#c8102e;line-height:1.3;}
-    .ace-sub{font-size:11px;color:#64748b;}
+    .ace-name{font-size:13px;font-weight:700;color:#c8102e;line-height:1.4;}
+    .ace-sub{font-size:12px;font-weight:700;color:#1e293b;}
+    .score-box{border:2px solid #c8102e;border-radius:8px;padding:8px 16px;text-align:center;min-width:110px;}
+    .score-box-label{font-size:11px;color:#64748b;margin-bottom:4px;}
+    .score-box-value{font-size:22px;font-weight:700;color:#c8102e;min-height:28px;border-bottom:1.5px solid #c8102e;}
     .doc-title{text-align:center;font-size:16px;font-weight:700;text-transform:uppercase;
                letter-spacing:1px;margin:16px 0 20px;border-top:2px solid #c8102e;
                border-bottom:1px solid #c8102e;padding:8px 0;}
@@ -1385,10 +1389,18 @@ async function downloadAnswersPDF(submissionId) {
   </head><body>
 
   <div class="ace-header">
-    <img class="ace-logo" src="https://lh3.googleusercontent.com/d/1jtxhRrUxip69b4VqgqAR9joCsZ2dDx79" onerror="this.style.display='none'">
-    <div>
-      <div class="ace-name">ACE Testing System</div>
-      <div class="ace-sub">Anh ngữ Á Châu</div>
+    <div class="ace-left">
+      <img class="ace-logo" src="https://lh3.googleusercontent.com/d/1jtxhRrUxip69b4VqgqAR9joCsZ2dDx79" onerror="this.style.display='none'">
+      <div>
+        <div class="ace-name">A Chau English Centers System</div>
+        <div class="ace-sub">ACE Testing System</div>
+      </div>
+    </div>
+    <div class="score-box">
+      <div class="score-box-label">ĐIỂM SỐ</div>
+      <div class="score-box-value">&nbsp;</div>
+      <div style="font-size:10px;color:#94a3b8;margin-top:4px;">Giám khảo ký tên</div>
+      <div style="border-top:1px solid #e2e8f0;margin-top:18px;"></div>
     </div>
   </div>
 
