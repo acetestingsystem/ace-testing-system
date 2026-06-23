@@ -363,16 +363,37 @@
         <div class="card-title">🚨 Vi phạm theo thời gian thực
           <span id="vio-refresh-badge" style="font-size:11px;color:#64748b;font-weight:400;margin-left:8px;">Tự động làm mới mỗi 10s</span>
         </div>
-        <div class="form-row">
-          <div class="form-group">
+        <div class="form-row" style="flex-wrap:wrap;gap:12px;">
+          <div class="form-group" style="min-width:180px;">
             <label>Lọc theo bài thi</label>
-            <select id="vio-exam-id">
+            <select id="vio-exam-id" onchange="filterViolations()">
               <option value="">-- Tất cả bài thi --</option>
             </select>
           </div>
+          <div class="form-group" style="min-width:140px;">
+            <label>Mã thí sinh</label>
+            <input type="text" id="vio-filter-id" placeholder="VD: SV001" oninput="filterViolations()"
+              style="padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:7px;font-size:13px;width:100%;">
+          </div>
+          <div class="form-group" style="min-width:160px;">
+            <label>Tên thí sinh</label>
+            <input type="text" id="vio-filter-name" placeholder="Tìm theo tên..." oninput="filterViolations()"
+              style="padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:7px;font-size:13px;width:100%;">
+          </div>
+          <div class="form-group" style="min-width:130px;">
+            <label>Loại vi phạm</label>
+            <select id="vio-filter-type" onchange="filterViolations()" style="padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:7px;font-size:13px;width:100%;">
+              <option value="">-- Tất cả --</option>
+              <option value="cam2">Camera 2</option>
+              <option value="face">Khuôn mặt</option>
+              <option value="tab">Chuyển tab</option>
+              <option value="fullscreen">Toàn màn hình</option>
+            </select>
+          </div>
           <div class="form-group" style="align-self:flex-end;display:flex;gap:8px;">
-            <button class="btn btn-primary" onclick="loadViolations()">🔍 Tải vi phạm</button>
-            <button class="btn btn-outline" onclick="testLogViolation()" title="Thêm vi phạm test để kiểm tra GAS">🧪 Test GAS</button>
+            <button class="btn btn-primary" onclick="loadViolations()">🔄 Tải lại</button>
+            <button class="btn btn-outline" onclick="clearVioFilters()">✕ Xóa lọc</button>
+            <button class="btn btn-outline" onclick="testLogViolation()" title="Test GAS">🧪</button>
           </div>
         </div>
         <div id="violations-summary"></div>
@@ -1087,12 +1108,29 @@ async function gradeAnswer(submissionId, questionId, score) {
 
 // ======================== Violations ========================
 let violationsRefreshTimer = null;
+let _allViolations = [];
+
+const _typeLabels = {
+  phone_detected:    '📱 Điện thoại',
+  multiple_faces:    '👥 Nhiều người',
+  face_not_detected: '👁️ Không thấy mặt',
+  looking_away:      '👀 Nhìn đi chỗ khác',
+  tab_switch:        '🔀 Chuyển tab',
+  window_blur:       '🪟 Rời cửa sổ',
+  fullscreen_exit:   '⛶ Thoát toàn màn hình',
+  cam2_connected:    '📷 Cam2 kết nối',
+  cam2_online:       '📷 Cam2 trực tuyến',
+  cam2_offline:      '📵 Cam2 ngoại tuyến',
+  cam2_disconnected: '📵 Cam2 mất kết nối',
+  cam2_reconnected:  '📷 Cam2 kết nối lại',
+  cam2_person:       '👤 Cam2: người lạ',
+  behavior:          '⚠️ Hành vi'
+};
 
 async function loadViolations() {
   const examId = document.getElementById('vio-exam-id')?.value || '';
   const res = await gas('apiGetViolations', examId || null);
   const tbody = document.getElementById('violations-table');
-  const summary = document.getElementById('violations-summary');
   if (!tbody) return;
 
   if (!res.success) {
@@ -1100,30 +1138,48 @@ async function loadViolations() {
     return;
   }
 
-  const rows = res.data || [];
+  _allViolations = res.data || [];
+  filterViolations();
+
+  document.getElementById('vio-refresh-badge').textContent = 'Tự động làm mới mỗi 10s';
+}
+
+function filterViolations() {
+  const tbody   = document.getElementById('violations-table');
+  const summary = document.getElementById('violations-summary');
+  if (!tbody) return;
+
+  const filterSid  = (document.getElementById('vio-filter-id')?.value   || '').trim().toLowerCase();
+  const filterName = (document.getElementById('vio-filter-name')?.value || '').trim().toLowerCase();
+  const filterType = (document.getElementById('vio-filter-type')?.value || '').trim().toLowerCase();
+
+  const rows = _allViolations.filter(r => {
+    if (filterSid  && !(r.student_id || '').toLowerCase().includes(filterSid)) return false;
+    if (filterName && !(r.student_name || '').toLowerCase().includes(filterName) &&
+                      !(r.detail || '').toLowerCase().includes(filterName)) return false;
+    if (filterType) {
+      const t = (r.type || '').toLowerCase();
+      if (filterType === 'cam2'       && !t.startsWith('cam2'))                                              return false;
+      if (filterType === 'face'       && !['multiple_faces','face_not_detected','looking_away','phone_detected'].includes(t)) return false;
+      if (filterType === 'tab'        && !['tab_switch','window_blur'].includes(t))                          return false;
+      if (filterType === 'fullscreen' && t !== 'fullscreen_exit')                                            return false;
+    }
+    return true;
+  });
+
   const highCount = rows.filter(r => r.severity === 'high').length;
   const medCount  = rows.filter(r => r.severity === 'medium').length;
+  const filteredNote = rows.length < _allViolations.length ? ` / ${_allViolations.length}` : '';
 
   summary.innerHTML = `
-    <div class="vio-stat vio-stat-total">📋 Tổng: ${rows.length}</div>
+    <div class="vio-stat vio-stat-total">📋 Hiển thị: ${rows.length}${filteredNote}</div>
     <div class="vio-stat vio-stat-high">🔴 Nghiêm trọng: ${highCount}</div>
     <div class="vio-stat vio-stat-med">🟡 Trung bình: ${medCount}</div>`;
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#64748b;padding:32px;">Chưa có vi phạm nào</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#64748b;padding:32px;">Không có vi phạm nào phù hợp với bộ lọc</td></tr>';
     return;
   }
-
-  const typeLabels = {
-    phone_detected:  '📱 Điện thoại',
-    multiple_faces:  '👥 Nhiều người',
-    face_not_detected: '👁️ Không thấy mặt',
-    looking_away:    '👀 Nhìn đi chỗ khác',
-    tab_switch:      '🔀 Chuyển tab',
-    window_blur:     '🪟 Rời cửa sổ',
-    fullscreen_exit: '⛶ Thoát toàn màn hình',
-    behavior:        '⚠️ Hành vi'
-  };
 
   tbody.innerHTML = rows.map(r => {
     const cls = r.severity === 'high' ? 'violation-row-high' : 'violation-row-medium';
@@ -1131,19 +1187,24 @@ async function loadViolations() {
       ? '<span class="badge-high">Nghiêm trọng</span>'
       : '<span class="badge-medium">Trung bình</span>';
     const ts = r.timestamp ? new Date(r.timestamp).toLocaleString('vi-VN') : '';
-    const typeLabel = typeLabels[r.type] || r.type;
+    const typeLabel = _typeLabels[r.type] || r.type;
     return `<tr class="${cls}">
       <td style="font-size:12px;white-space:nowrap;">${ts}</td>
-      <td>${r.student_id}</td>
+      <td><b>${r.student_id}</b>${r.student_name ? `<br><span style="font-size:11px;color:#64748b;">${r.student_name}</span>` : ''}</td>
       <td style="font-size:12px;">${r.exam_id}</td>
       <td>${typeLabel}</td>
       <td style="font-size:12px;">${r.detail || ''}</td>
       <td>${badge}</td>
     </tr>`;
   }).join('');
+}
 
-  // Reset auto-refresh countdown display
-  document.getElementById('vio-refresh-badge').textContent = 'Tự động làm mới mỗi 10s';
+function clearVioFilters() {
+  ['vio-filter-id','vio-filter-name','vio-filter-type'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  filterViolations();
 }
 
 // Auto-refresh violations every 10s while on that panel
