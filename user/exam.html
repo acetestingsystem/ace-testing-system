@@ -84,10 +84,25 @@
   /* SA */
   .sa-textarea {
     width: 100%; padding: 10px 12px; border: 1.5px solid var(--border);
-    border-radius: 8px; font-size: 13px; resize: vertical; min-height: 80px;
-    font-family: inherit; color: var(--text);
+    border-radius: 8px; font-size: 13px; resize: none; overflow: hidden; min-height: 80px;
+    font-family: inherit; color: var(--text); line-height: 1.6;
   }
   .sa-textarea:focus { outline: none; border-color: var(--primary); }
+
+  /* ── Question navigator ── */
+  #q-nav {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    padding: 8px 14px; border-bottom: 1px solid var(--border);
+    background: #f8fafc; flex-shrink: 0;
+  }
+  .q-nav-btn {
+    width: 28px; height: 28px; border-radius: 6px; border: 1.5px solid var(--border);
+    background: #fff; font-size: 11px; font-weight: 700; cursor: pointer;
+    color: #64748b; transition: all .15s; display: flex; align-items: center; justify-content: center;
+  }
+  .q-nav-btn:hover { border-color: var(--primary); color: var(--primary); }
+  .q-nav-btn.nav-answered { background: var(--success); border-color: var(--success); color: #fff; }
+  .q-nav-btn.nav-active   { border-color: var(--primary); box-shadow: 0 0 0 2px #bfdbfe; }
 
   /* Progress bar */
   #progress-row { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #64748b; }
@@ -241,6 +256,7 @@
         <div id="answer-progress"><div id="answer-fill" style="width:0%"></div></div>
       </div>
     </div>
+    <div id="q-nav"></div>
     <div id="quiz-scroll"></div>
     <div id="submit-zone">
       <button id="btn-submit" onclick="confirmSubmit()">📤 Nộp bài</button>
@@ -486,12 +502,14 @@ function renderPdfAnswerBoxes() {
       </div>
       <textarea class="sa-textarea" id="sa-${qid}"
         placeholder="Nhập câu trả lời câu ${i}..."
-        oninput="updatePdfAnswer('${qid}', this.value)"
+        oninput="updatePdfAnswer('${qid}', this.value); autoResize(this)"
         onfocus="onPdfFocus('${qid}')" onblur="onPdfBlur('${qid}')"></textarea>
     </div>`;
   }
   container.innerHTML = html;
+  buildNav();
   updatePdfProgress();
+  container.querySelectorAll('.sa-textarea').forEach(t => autoResize(t));
 }
 
 function updatePdfAnswer(qid, value) {
@@ -509,12 +527,50 @@ function updatePdfProgress() {
   const answered = Object.values(pdfAnswers).filter(v => v.trim() !== '').length;
   document.getElementById('answered-count').textContent = `${answered}/${total}`;
   document.getElementById('answer-fill').style.width = total ? (answered / total * 100) + '%' : '0%';
+  syncNav();
+}
+
+// ── Auto-resize textarea ──
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+}
+
+// ── Question navigator ──
+function buildNav() {
+  const nav = document.getElementById('q-nav');
+  if (!nav) return;
+  const isPdf = typeof pdfAnswers !== 'undefined' && Object.keys(pdfAnswers).length > 0 && !questions.length;
+  const items = isPdf
+    ? Object.keys(pdfAnswers).map((qid, i) => ({ id: qid, label: i + 1 }))
+    : questions.map((q, i) => ({ id: q.question_id, label: i + 1 }));
+  nav.innerHTML = items.map(it =>
+    `<button class="q-nav-btn" id="nav-${it.id}" onclick="scrollToQ('${it.id}')">${it.label}</button>`
+  ).join('');
+}
+
+function syncNav() {
+  const isPdf = typeof pdfAnswers !== 'undefined' && Object.keys(pdfAnswers).length > 0 && !questions.length;
+  const entries = isPdf
+    ? Object.entries(pdfAnswers).map(([id, v]) => ({ id, answered: v.trim().length > 0 }))
+    : questions.map(q => ({ id: q.question_id, answered: !!(answers[q.question_id]?.answer?.trim()) }));
+  entries.forEach(({ id, answered }) => {
+    document.getElementById('nav-' + id)?.classList.toggle('nav-answered', answered);
+  });
+}
+
+function scrollToQ(qid) {
+  const el = document.getElementById('qblock-' + qid);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function renderQuestions() {
   const container = document.getElementById('quiz-scroll');
   container.innerHTML = questions.map((q, i) => buildQuestion(q, i)).join('');
+  buildNav();
   updateProgress();
+  // attach auto-resize to all SA textareas after render
+  container.querySelectorAll('.sa-textarea').forEach(t => autoResize(t));
 }
 
 function buildQuestion(q, i) {
@@ -531,7 +587,7 @@ function buildQuestion(q, i) {
       </div>`
     : `<textarea class="sa-textarea" id="sa-${q.question_id}"
          placeholder="Nhập câu trả lời của bạn..."
-         oninput="updateSA('${q.question_id}', this.value)"
+         oninput="updateSA('${q.question_id}', this.value); autoResize(this)"
          onfocus="onQFocus('${q.question_id}')"
          onblur="onQBlur('${q.question_id}')"></textarea>`;
 
@@ -580,6 +636,7 @@ function updateProgress() {
   const answered = Object.values(answers).filter(a => a.answer && a.answer.trim() !== '').length;
   document.getElementById('answered-count').textContent = `${answered}/${total}`;
   document.getElementById('answer-fill').style.width = total ? (answered / total * 100) + '%' : '0%';
+  syncNav();
 }
 
 // ════════════════════════════════════════════════
