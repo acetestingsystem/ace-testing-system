@@ -284,6 +284,21 @@
 <!-- Violation flash -->
 <div id="violation-flash"></div>
 
+<!-- Admin Pause Overlay -->
+<div id="admin-pause-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.93);z-index:810;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;padding:24px;">
+  <div style="font-size:56px;">🛑</div>
+  <div style="font-size:22px;font-weight:800;color:#f59e0b;">Bài thi đang bị tạm dừng</div>
+  <div style="font-size:14px;color:#cbd5e1;max-width:320px;line-height:1.7;">
+    Giám thị đã <b style="color:#fbbf24">tạm dừng</b> bài thi của bạn.<br>
+    Vui lòng chờ giám thị tiếp tục.
+  </div>
+  <div style="background:#1e293b;border-radius:10px;padding:10px 32px;">
+    <div style="font-size:12px;color:#94a3b8;">Thời gian tạm dừng</div>
+    <div id="admin-pause-elapsed" style="font-size:28px;font-weight:800;color:#f59e0b;font-variant-numeric:tabular-nums;">0s</div>
+  </div>
+  <div style="font-size:12px;color:#64748b;">Thời gian tạm dừng sẽ không được hoàn lại.</div>
+</div>
+
 <!-- Cam2 Freeze Overlay — blocks exam when camera 2 disconnects -->
 <div id="cam2-freeze" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.93);z-index:800;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;padding:24px;">
   <div style="font-size:56px;">📵</div>
@@ -385,6 +400,9 @@ let submitted     = false;
 let questionFocusStart = {};   // questionId -> Date
 let identityPhotoUrl = '';
 let _monitorUrl = '';
+let _adminPaused  = false;
+let _heartbeatTimer = null;
+let _commandPollTimer = null;
 
 // ════════════════════════════════════════════════
 // Boot
@@ -426,6 +444,10 @@ async function loadExam() {
 
     // Upload identity photo to Drive (fire-and-forget, store URL for submission)
     saveIdentityPhotoAsync(examId, studentData.student_id);
+
+    // Start admin live-control heartbeat + command poll
+    startHeartbeat();
+    startCommandPoll();
 
     // Switch to Camera 2 mandatory setup phase
     document.getElementById('phase-loading').style.display = 'none';
@@ -640,6 +662,80 @@ function updateProgress() {
   document.getElementById('answered-count').textContent = `${answered}/${total}`;
   document.getElementById('answer-fill').style.width = total ? (answered / total * 100) + '%' : '0%';
   syncNav();
+}
+
+// ════════════════════════════════════════════════
+// Admin live control — heartbeat + command poll
+// ════════════════════════════════════════════════
+let _adminPauseSec = 0;
+let _adminPauseInterval = null;
+
+function startHeartbeat() {
+  if (_heartbeatTimer) return;
+  _sendHeartbeat();
+  _heartbeatTimer = setInterval(_sendHeartbeat, 10000);
+}
+
+function _sendHeartbeat() {
+  if (!studentData || !examId || submitted) return;
+  const answered = pdfMode
+    ? Object.values(pdfAnswers).filter(v => v.trim()).length
+    : Object.values(answers).filter(a => a.answer?.trim()).length;
+  const blob = new Blob([JSON.stringify({
+    action: 'saveHeartbeat',
+    args: [studentData.student_id, examId, timerSec, answered, studentData.name || '']
+  })], { type: 'text/plain' });
+  if (navigator.sendBeacon) navigator.sendBeacon(GAS_URL, blob);
+  else fetch(GAS_URL, { method: 'POST', body: blob, mode: 'no-cors' }).catch(() => {});
+}
+
+function startCommandPoll() {
+  if (_commandPollTimer) return;
+  _commandPollTimer = setInterval(_pollCommand, 5000);
+}
+
+async function _pollCommand() {
+  if (!studentData || !examId || submitted) return;
+  try {
+    const res = await gas('getCommand', studentData.student_id, examId);
+    if (!res.success || !res.data) return;
+    const { command, id: cmdId } = res.data;
+    if (command === 'pause'  && !_adminPaused) _adminPauseExam(cmdId);
+    if (command === 'resume' &&  _adminPaused) _adminResumeExam(cmdId);
+    if (command === 'reset')                   _adminResetExam(cmdId);
+  } catch(e) {}
+}
+
+function _ackCommand(cmdId) {
+  const blob = new Blob([JSON.stringify({ action: 'ackCommand', args: [cmdId] })], { type: 'text/plain' });
+  if (navigator.sendBeacon) navigator.sendBeacon(GAS_URL, blob);
+  else fetch(GAS_URL, { method: 'POST', body: blob, mode: 'no-cors' }).catch(() => {});
+}
+
+function _adminPauseExam(cmdId) {
+  _adminPaused = true;
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  _adminPauseSec = 0;
+  _adminPauseInterval = setInterval(() => {
+    _adminPauseSec++;
+    document.getElementById('admin-pause-elapsed').textContent = _adminPauseSec + 's';
+  }, 1000);
+  document.getElementById('admin-pause-overlay').style.display = 'flex';
+  _ackCommand(cmdId);
+}
+
+function _adminResumeExam(cmdId) {
+  _adminPaused = false;
+  if (_adminPauseInterval) { clearInterval(_adminPauseInterval); _adminPauseInterval = null; }
+  document.getElementById('admin-pause-overlay').style.display = 'none';
+  if (!submitted && !timerInterval) startTimer();
+  _ackCommand(cmdId);
+}
+
+function _adminResetExam(cmdId) {
+  _ackCommand(cmdId);
+  localStorage.removeItem('lms_draft');
+  setTimeout(() => location.reload(), 300);
 }
 
 // ════════════════════════════════════════════════
