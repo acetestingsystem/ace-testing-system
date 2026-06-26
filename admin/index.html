@@ -1041,18 +1041,35 @@ function loadResults(examId) {
   });
 }
 
+const _resultCache = {};
+const _examCache   = {};
+
 async function showResultDetail(submissionId) {
-  const res = await gas('apiGetStudentResult', submissionId);
-  if (!res.success) { toast(res.error, 'error'); return; }
-  const { submission: sub, answers } = res.data;
+  // Show modal with skeleton immediately so user sees feedback right away
+  document.getElementById('result-detail-content').innerHTML =
+    '<div style="padding:32px;text-align:center;color:#94a3b8;">' +
+    '<div style="font-size:28px;margin-bottom:12px;">⏳</div>' +
+    '<div style="font-size:14px;">Đang tải dữ liệu...</div></div>';
+  openModal('result-modal');
+
+  // Use cache to avoid re-fetching same submission
+  if (!_resultCache[submissionId]) {
+    const res = await gas('apiGetStudentResult', submissionId);
+    if (!res.success) { toast(res.error, 'error'); return; }
+    _resultCache[submissionId] = res.data;
+  }
+  const { submission: sub, answers } = _resultCache[submissionId];
 
   // Detect PDF exam: all answers have empty score and question_id like Q1, Q2...
   const isPdfExam = answers.length > 0 && answers.every(a => a.score === '' || a.score === false || !a.graded);
   const pdfExamDetected = answers.length > 0 && answers[0].question_id && String(answers[0].question_id).startsWith('Q');
 
-  // Get exam PDF url
-  const examRes = await gas('apiGetExam', sub.exam_id);
-  const pdfUrl = examRes.success ? examRes.data.pdf_url : '';
+  // Get exam PDF url (cached per exam_id)
+  if (!_examCache[sub.exam_id]) {
+    const examRes = await gas('apiGetExam', sub.exam_id);
+    _examCache[sub.exam_id] = examRes.success ? examRes.data : {};
+  }
+  const pdfUrl = _examCache[sub.exam_id].pdf_url || '';
 
   const photoUrl = sub.webcam_folder_url || '';
   const infoHtml = `
@@ -1129,13 +1146,13 @@ async function gradeSubmission(submissionId) {
   const score = parseFloat(document.getElementById('grade-total').value);
   if (isNaN(score)) { toast('Vui lòng nhập điểm hợp lệ', 'error'); return; }
   const res = await gas('apiGradeSubmission', submissionId, score);
-  if (res.success) toast('Đã lưu điểm!', 'success');
+  if (res.success) { delete _resultCache[submissionId]; toast('Đã lưu điểm!', 'success'); }
   else toast(res.error, 'error');
 }
 
 async function gradeAnswer(submissionId, questionId, score) {
   const res = await gas('apiGradeAnswer', submissionId, questionId, parseFloat(score));
-  if (res.success) toast('Đã chấm điểm!', 'success');
+  if (res.success) { delete _resultCache[submissionId]; toast('Đã chấm điểm!', 'success'); }
   else toast(res.error, 'error');
 }
 

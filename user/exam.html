@@ -691,7 +691,7 @@ function _sendHeartbeat() {
 
 function startCommandPoll() {
   if (_commandPollTimer) return;
-  _commandPollTimer = setInterval(_pollCommand, 5000);
+  _commandPollTimer = setInterval(_pollCommand, 1500);
 }
 
 async function _pollCommand() {
