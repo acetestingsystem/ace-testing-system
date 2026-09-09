@@ -821,7 +821,9 @@ async function uploadPdf(file) {
   };
 
   const mime = file.type || 'application/pdf';
-  const session = await gas('apiCreateUploadSession', file.name, mime);
+  // Origin must be registered when the session is created, or Drive rejects
+  // the browser's PUT with a CORS error.
+  const session = await gas('apiCreateUploadSession', file.name, mime, location.origin);
   if (!session.success) { fail(session.error); return; }
 
   fill.style.width = '25%';
