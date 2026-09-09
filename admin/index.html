@@ -801,42 +801,75 @@ if (dz) {
   });
 }
 
-function uploadPdf(file) {
+// Upload straight to Drive via a resumable session. The file bytes never pass
+// through Apps Script, which caps POST bodies at ~1.5MB.
+async function uploadPdf(file) {
   if (!currentExamId) { toast('Vui lòng chọn bài thi trước', 'error'); return; }
   const progress = document.getElementById('upload-progress');
   const fill = document.getElementById('progress-fill');
   const status = document.getElementById('upload-status');
   progress.style.display = 'block';
-  fill.style.width = '30%';
-  status.textContent = 'Đang đọc file...';
+  fill.style.width = '10%';
+  status.style.color = '';
+  status.textContent = 'Đang khởi tạo phiên tải lên...';
 
-  const reader = new FileReader();
-  reader.onload = async function(e) {
-    fill.style.width = '60%';
-    status.textContent = 'Đang tải lên Drive...';
-    const base64 = e.target.result.split(',')[1];
-    const res = await gas('apiUploadPDF', base64, file.name, file.type);
+  const fail = (msg) => {
     fill.style.width = '100%';
-    if (res.success) {
-      currentPdfFileId = res.data.fileId;
-      status.textContent = '✅ Upload thành công: ' + res.data.fileName;
-      status.style.color = '#16a34a';
-      document.getElementById('generate-options').style.display = 'block';
-      // Save PDF info to exam
-      await gas('apiSaveExam', {
-        exam_id: currentExamId,
-        pdf_url: res.data.fileUrl,
-        pdf_file_id: res.data.fileId,
-        pdf_name: res.data.fileName
-      });
-      toast('PDF đã được tải lên!', 'success');
-    } else {
-      status.textContent = '❌ ' + res.error;
-      status.style.color = '#dc2626';
-      toast(res.error, 'error');
-    }
+    status.textContent = '❌ ' + msg;
+    status.style.color = '#dc2626';
+    toast(msg, 'error');
   };
-  reader.readAsDataURL(file);
+
+  const mime = file.type || 'application/pdf';
+  const session = await gas('apiCreateUploadSession', file.name, mime);
+  if (!session.success) { fail(session.error); return; }
+
+  fill.style.width = '25%';
+  status.textContent = 'Đang tải lên Drive (' + (file.size / 1048576).toFixed(1) + ' MB)...';
+
+  let uploaded;
+  try {
+    // XHR (not fetch) so we get real upload progress
+    uploaded = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', session.data.uploadUrl, true);
+      xhr.setRequestHeader('Content-Type', mime);
+      xhr.upload.onprogress = (e) => {
+        if (!e.lengthComputable) return;
+        fill.style.width = (25 + (e.loaded / e.total) * 65) + '%';
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try { resolve(JSON.parse(xhr.responseText)); }
+          catch (err) { reject(new Error('Phản hồi không hợp lệ từ Drive')); }
+        } else {
+          reject(new Error('Drive trả về mã ' + xhr.status));
+        }
+      };
+      xhr.onerror = () => reject(new Error('Mất kết nối khi tải lên Drive'));
+      xhr.send(file);
+    });
+  } catch (e) { fail(e.message); return; }
+
+  if (!uploaded || !uploaded.id) { fail('Drive không trả về mã file'); return; }
+
+  fill.style.width = '92%';
+  status.textContent = 'Đang hoàn tất...';
+  const res = await gas('apiFinalizeUpload', uploaded.id, file.name);
+  fill.style.width = '100%';
+  if (!res.success) { fail(res.error); return; }
+
+  currentPdfFileId = res.data.fileId;
+  status.textContent = '✅ Upload thành công: ' + res.data.fileName;
+  status.style.color = '#16a34a';
+  document.getElementById('generate-options').style.display = 'block';
+  await gas('apiSaveExam', {
+    exam_id: currentExamId,
+    pdf_url: res.data.fileUrl,
+    pdf_file_id: res.data.fileId,
+    pdf_name: res.data.fileName
+  });
+  toast('PDF đã được tải lên!', 'success');
 }
 
 async function savePdfExamConfig() {
