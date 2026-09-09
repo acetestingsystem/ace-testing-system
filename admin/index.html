@@ -587,10 +587,27 @@ async function gas(fn, ...args) {
       headers: { 'Content-Type': 'text/plain' }
     });
     const text = await resp.text();
-    try { return JSON.parse(text); } catch(e) { return { success: false, error: text }; }
+    try {
+      return JSON.parse(text);
+    } catch(e) {
+      // Apps Script sometimes answers with an HTML interstitial instead of JSON
+      return { success: false, error: 'Máy chủ trả về dữ liệu không hợp lệ', transient: true };
+    }
   } catch(e) {
-    return { success: false, error: e.message };
+    return { success: false, error: e.message, transient: true };
   }
+}
+
+// Apps Script intermittently answers with a 404 or an HTML page. Retrying the
+// same call a few seconds later almost always succeeds.
+async function gasRetry(fn, ...args) {
+  let last;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    last = await gas(fn, ...args);
+    if (last.success || !last.transient) return last;
+    await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
+  }
+  return last;
 }
 
 function toast(msg, type='info') {
@@ -823,7 +840,7 @@ async function uploadPdf(file) {
   const mime = file.type || 'application/pdf';
   // Origin must be registered when the session is created, or Drive rejects
   // the browser's PUT with a CORS error.
-  const session = await gas('apiCreateUploadSession', file.name, mime, location.origin);
+  const session = await gasRetry('apiCreateUploadSession', file.name, mime, location.origin);
   if (!session.success) { fail(session.error); return; }
 
   fill.style.width = '25%';
@@ -855,11 +872,15 @@ async function uploadPdf(file) {
 
   if (!uploaded || !uploaded.id) { fail('Drive không trả về mã file'); return; }
 
+  // The file is already in Drive at this point; finalize only opens read access.
   fill.style.width = '92%';
   status.textContent = 'Đang hoàn tất...';
-  const res = await gas('apiFinalizeUpload', uploaded.id, file.name);
+  const res = await gasRetry('apiFinalizeUpload', uploaded.id, file.name);
   fill.style.width = '100%';
-  if (!res.success) { fail(res.error); return; }
+  if (!res.success) {
+    fail(res.error + ' (file đã lên Drive, thử tải lên lại)');
+    return;
+  }
 
   currentPdfFileId = res.data.fileId;
   status.textContent = '✅ Upload thành công: ' + res.data.fileName;
