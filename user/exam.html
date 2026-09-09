@@ -374,7 +374,7 @@
 // ════════════════════════════════════════════════
 // GAS API helper (fetch-based, for GitHub Pages)
 // ════════════════════════════════════════════════
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbxeWng8djn2nsp26i4CinFZGlsQlGOFiUF4UAKO56uDWlAfbYlOTcjbvyHXiEPTda8K/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwRKaJume4h7OKCZl3y2eYfubOf2TVKCkJJjvKhHRGD8eA6uLKAI0A4OKi3EHCQZSwp/exec';
 async function gas(action, ...args) {
   const url = GAS_URL + '?action=' + encodeURIComponent(action) + '&args=' + encodeURIComponent(JSON.stringify(args));
   const resp = await fetch(url, { redirect: 'follow' });
